@@ -34,6 +34,7 @@ pub enum BoltReaderError {
     FixedLengthDataPageError(String),
     BridgeError(String),
     RepDefError(String),
+    FixedLengthColumnReaderError(String),
 }
 
 impl Error for BoltReaderError {}
@@ -76,6 +77,9 @@ impl Display for BoltReaderError {
             }
             BoltReaderError::RepDefError(e) => {
                 writeln!(f, "Repetition and Definition Error: {e}")
+            }
+            BoltReaderError::FixedLengthColumnReaderError(e) => {
+                writeln!(f, "Fixed Length Column Reader Error: {e}")
             }
         }
     }

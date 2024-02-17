@@ -16,9 +16,10 @@
 use thrift::protocol::{TCompactInputProtocol, TSerializable};
 
 use crate::metadata::parquet_metadata_thrift::PageHeader;
+use crate::utils::byte_buffer_base::ByteBufferBase;
 use crate::utils::exceptions::BoltReaderError;
 
-pub fn read_page_header<T: std::io::Read>(buffer: &mut T) -> Result<PageHeader, BoltReaderError> {
+pub fn read_page_header(buffer: &mut dyn ByteBufferBase) -> Result<PageHeader, BoltReaderError> {
     let mut protocol = TCompactInputProtocol::new(buffer);
 
     let page_header = PageHeader::read_from_in_protocol(&mut protocol);

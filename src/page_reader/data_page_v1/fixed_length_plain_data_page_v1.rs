@@ -141,9 +141,16 @@ impl<'a, T: 'static + std::marker::Copy> DataPage<T> for FixedLengthPlainDataPag
         offset: usize,
         result_row_range_set: &mut RowRangeSet,
         result_bridge: &mut dyn Bridge<T>,
-    ) -> Result<(), BoltReaderError> {
+    ) -> Result<bool, BoltReaderError> {
+        if self.has_null {
+            return Err(BoltReaderError::NotYetImplementedError(String::from(
+                "Not Yet Implemented: Read Data Page with nulls",
+            )));
+        }
+
         let start = to_read.begin + offset - self.current_offset;
         let end = to_read.end + offset - self.current_offset;
+        let finished = end == self.num_values;
         let filter = self.filter.unwrap();
         let vec_t = unsafe { convert_generic_vec!(&self.data[..], mem::size_of::<T>(), T) };
 
@@ -210,7 +217,7 @@ impl<'a, T: 'static + std::marker::Copy> DataPage<T> for FixedLengthPlainDataPag
         }
 
         mem::forget(vec_t);
-        Ok(())
+        Ok(finished)
     }
 }
 
