@@ -1,0 +1,30 @@
+# Copyright (c) ByteDance, Inc. and its affiliates.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+comment_width = 120
+format_code_in_doc_comments = true
+format_macro_bodies = true
+format_macro_matchers = true
+normalize_comments = true
+normalize_doc_attributes = true
+imports_granularity = "Module"
+group_imports = "StdExternalCrate"
+reorder_impl_items = true
+reorder_imports = true
+tab_spaces = 4
+# TODO: Fix it later. It produces too many unwanted changes related with markdown lists now. e.g.,
+# https://github.com/rust-lang/rustfmt/issues/5862
+# https://github.com/rust-lang/rustfmt/issues/5836
+# wrap_comments = true
