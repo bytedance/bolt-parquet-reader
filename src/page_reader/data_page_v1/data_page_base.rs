@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::{max, min};
 use std::intrinsics::unlikely;
 
 use crate::bridge::bridge_base::Bridge;
@@ -43,47 +42,27 @@ pub trait DataPage<T> {
         &self,
         page_begin: usize,
         page_end: usize,
-        offset: usize,
+        row_range_offset: usize,
         row_range: &RowRange,
     ) -> Result<Option<RowRange>, BoltReaderError> {
-        let begin = row_range.begin + offset;
-
-        if unlikely(begin < page_begin) {
-            return Err(BoltReaderError::FixedLengthDataPageError(format!("Range processing error. Input range begin: {} cannot be smaller than the data page begin: {} with offset", begin, page_begin)));
+        if unlikely(row_range.begin + row_range_offset < page_begin) {
+            return Err(BoltReaderError::FixedLengthDataPageError(format!("Range processing error. Input range begin: {} cannot be smaller than the data page begin: {} with offset", row_range.begin + row_range_offset, page_begin)));
         }
 
-        if begin >= page_begin && begin <= page_end {
-            return Ok(Some(RowRange::new(
-                row_range.begin,
-                min(row_range.end, page_end - offset),
-            )));
-        }
-
-        Ok(None)
+        row_range.get_covered_range(row_range_offset, page_begin, page_end)
     }
 
     fn get_data_page_remaining_range(
         &self,
         page_begin: usize,
         page_end: usize,
-        offset: usize,
+        row_range_offset: usize,
         row_range: &RowRange,
     ) -> Result<Option<RowRange>, BoltReaderError> {
-        let begin = row_range.begin + offset;
-        let end = row_range.end + offset;
-
-        if unlikely(begin < page_begin) {
-            return Err(BoltReaderError::FixedLengthDataPageError(format!("Range processing error. Input range begin: {} cannot be smaller than the data page begin: {} with offset", begin, page_begin)));
+        if unlikely(row_range.begin + row_range_offset < page_begin) {
+            return Err(BoltReaderError::FixedLengthDataPageError(format!("Range processing error. Input range begin: {} cannot be smaller than the data page begin: {} with offset", row_range.begin + row_range_offset, page_begin)));
         }
-
-        if end <= page_end {
-            return Ok(None);
-        }
-
-        Ok(Option::from(RowRange::new(
-            max(row_range.begin, page_end - offset),
-            row_range.end,
-        )))
+        row_range.get_right_remaining_range(row_range_offset, page_begin, page_end)
     }
 }
 #[cfg(test)]
