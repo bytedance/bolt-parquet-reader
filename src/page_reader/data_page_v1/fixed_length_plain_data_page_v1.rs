@@ -47,6 +47,15 @@ pub struct FixedLengthPlainDataPageReaderV1<'a, T> {
     data: Vec<T>,
 }
 
+impl<'a, T> Drop for FixedLengthPlainDataPageReaderV1<'a, T> {
+    fn drop(&mut self) {
+        let data = mem::take(&mut self.data);
+        if self.is_zero_copied() {
+            mem::forget(data);
+        }
+    }
+}
+
 #[allow(dead_code)]
 impl<'a, T: ToString> std::fmt::Display for FixedLengthPlainDataPageReaderV1<'a, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -91,6 +100,34 @@ impl<'a, T> DataPage<T> for FixedLengthPlainDataPageReaderV1<'a, T> {
 
     fn get_data_page_type_size(&self) -> usize {
         self.type_size
+    }
+
+    fn is_zero_copied(&self) -> bool {
+        self.zero_copy
+    }
+
+    fn read(
+        &self,
+        to_read: RowRange,
+        offset: usize,
+        result_row_range_set: &mut RowRangeSet,
+        result_bridge: &mut dyn Bridge<T>,
+    ) -> Result<bool, BoltReaderError> {
+        let finished = if self.has_null {
+            return Err(BoltReaderError::NotYetImplementedError(String::from(
+                "Not Yet Implemented: Read Data Page with nulls",
+            )));
+        } else {
+            let start = to_read.begin + offset - self.current_offset;
+            let end = to_read.end + offset - self.current_offset;
+            result_row_range_set.add_row_ranges(
+                to_read.begin + offset - result_row_range_set.get_offset(),
+                to_read.end + offset - result_row_range_set.get_offset(),
+            );
+            result_bridge.append_non_null_results(&self.data[start..end])?;
+            end == self.num_values
+        };
+        Ok(finished)
     }
 }
 
@@ -230,35 +267,6 @@ impl<'a, T: 'static + std::marker::Copy> FixedLengthPlainDataPageReaderV1<'a, T>
         mem::forget(vec_t);
         Ok(())
     }
-
-    pub fn read(
-        &self,
-        to_read: RowRange,
-        offset: usize,
-        result_row_range_set: &mut RowRangeSet,
-        result_bridge: &mut dyn Bridge<T>,
-    ) -> Result<(), BoltReaderError> {
-        if self.has_null {
-            return Err(BoltReaderError::NotYetImplementedError(String::from(
-                "Not Yet Implemented: Read Data Page with nulls",
-            )));
-        } else {
-            let start = to_read.begin + offset - self.current_offset;
-            let end = to_read.end + offset - self.current_offset;
-            result_row_range_set.add_row_ranges(
-                to_read.begin + offset - result_row_range_set.get_offset(),
-                to_read.end + offset - result_row_range_set.get_offset(),
-            );
-            result_bridge.append_non_null_results(&self.data[start..end])?;
-        }
-        Ok(())
-    }
-}
-
-#[allow(dead_code)]
-#[inline(always)]
-pub fn destroy_fixed_length_plain_data_page_v1<T>(data_page: FixedLengthPlainDataPageReaderV1<T>) {
-    mem::forget(data_page.data);
 }
 
 #[cfg(test)]
@@ -272,9 +280,7 @@ mod tests {
     use crate::filters::integer_range_filter::IntegerRangeFilter;
     use crate::metadata::page_header::read_page_header;
     use crate::page_reader::data_page_v1::data_page_base::DataPage;
-    use crate::page_reader::data_page_v1::fixed_length_plain_data_page_v1::{
-        destroy_fixed_length_plain_data_page_v1, FixedLengthPlainDataPageReaderV1,
-    };
+    use crate::page_reader::data_page_v1::fixed_length_plain_data_page_v1::FixedLengthPlainDataPageReaderV1;
     use crate::utils::byte_buffer_base::ByteBufferBase;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
@@ -285,7 +291,7 @@ mod tests {
 
     fn load_non_null_plain_data_page<'a, T: 'static + std::marker::Copy>(
         data_page_offset: usize,
-        path: String,
+        path: &String,
     ) -> (
         Result<FixedLengthPlainDataPageReaderV1<'a, T>, BoltReaderError>,
         DirectByteBuffer,
@@ -424,22 +430,40 @@ mod tests {
     fn test_create_fixed_length_plain_data_page_v1() {
         let path = String::from("src/sample_files/linitem_plain_data_page");
         let (data_page, _buffer): (Result<FixedLengthPlainDataPageReaderV1<i64>, _>, _) =
-            load_non_null_plain_data_page(100, path);
+            load_non_null_plain_data_page(100, &path);
         assert!(data_page.is_ok());
         let data_page = data_page.unwrap();
 
         assert_eq!(data_page.to_string(), "Plain Data Page: has_null false, num_values 11212, current_offset 100\nData: 429, 54914, 54914, 54914, 54914, 54914, 54914, 54914, 54915, 54916 ...\nValidity: true, true, true, true, true, true, true, true, true, true ...\n");
+    }
 
-        if data_page.zero_copy {
-            destroy_fixed_length_plain_data_page_v1(data_page);
-        }
+    #[test]
+    fn test_create_fixed_length_plain_data_page_v1_drop() {
+        let path = String::from("src/sample_files/linitem_plain_data_page");
+        let (data_page, _buffer): (Result<FixedLengthPlainDataPageReaderV1<i64>, _>, _) =
+            load_non_null_plain_data_page(100, &path);
+        assert!(data_page.is_ok());
+        let data_page_zero_copy = data_page.unwrap();
+
+        let res = LocalFileLoader::new(&path);
+        assert!(res.is_ok());
+        let file = res.unwrap();
+        let (data_page, _buffer): (Result<FixedLengthPlainDataPageReaderV1<i64>, _>, _) =
+            load_non_null_plain_data_page_in_streaming_buffer(&file, 100, 16);
+        assert!(data_page.is_ok());
+        let data_page_deep_copy = data_page.unwrap();
+
+        assert_eq!(data_page_zero_copy.is_zero_copied(), true);
+        assert_eq!(data_page_deep_copy.is_zero_copied(), false);
+
+        // Both deep copy and zero data page should be safely release at this point.
     }
 
     #[test]
     fn test_read_data_page() {
         let path = String::from("src/sample_files/linitem_plain_data_page");
         let (data_page, _buffer): (Result<FixedLengthPlainDataPageReaderV1<i64>, _>, _) =
-            load_non_null_plain_data_page(100, path);
+            load_non_null_plain_data_page(100, &path);
         assert!(data_page.is_ok());
         let data_page = data_page.unwrap();
         let to_read = RowRange::new(50, 60);
@@ -461,6 +485,7 @@ mod tests {
         let mut raw_bridge = RawBridge::new(false, capacity);
         let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
         assert!(res.is_ok());
+        assert_eq!(res.unwrap(), false);
 
         assert_eq!(
             raw_bridge
@@ -522,10 +547,6 @@ mod tests {
                 .unwrap(),
             (true, 54916)
         );
-
-        if data_page.zero_copy {
-            destroy_fixed_length_plain_data_page_v1(data_page);
-        }
     }
 
     #[test]
@@ -613,10 +634,6 @@ mod tests {
                 .1;
             assert!(filter.check_i64(value));
         }
-
-        if data_page.zero_copy {
-            destroy_fixed_length_plain_data_page_v1(data_page);
-        }
     }
 
     #[test]
@@ -651,6 +668,7 @@ mod tests {
             let mut raw_bridge = RawBridge::new(false, capacity);
             let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
             assert!(res.is_ok());
+            assert_eq!(res.unwrap(), false);
 
             assert_eq!(
                 raw_bridge
@@ -712,10 +730,6 @@ mod tests {
                     .unwrap(),
                 (true, 54916)
             );
-
-            if data_page.zero_copy {
-                destroy_fixed_length_plain_data_page_v1(data_page);
-            }
         }
     }
 
@@ -808,17 +822,13 @@ mod tests {
                 .1;
             assert!(filter.check_i64(value));
         }
-
-        if data_page.zero_copy {
-            destroy_fixed_length_plain_data_page_v1(data_page);
-        }
     }
 
     #[test]
     fn test_read_outside_of_data_page() {
         let path = String::from("src/sample_files/linitem_plain_data_page");
         let (data_page, _buffer): (Result<FixedLengthPlainDataPageReaderV1<i64>, _>, _) =
-            load_non_null_plain_data_page(100, path);
+            load_non_null_plain_data_page(100, &path);
         assert!(data_page.is_ok());
         let data_page = data_page.unwrap();
         let to_read = RowRange::new(
@@ -843,6 +853,8 @@ mod tests {
         let mut raw_bridge = RawBridge::new(false, capacity);
         let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
         assert!(res.is_ok());
+        assert_eq!(res.unwrap(), true);
+
         assert_eq!(raw_bridge.get_size(), 10);
 
         assert_eq!(
@@ -945,17 +957,13 @@ mod tests {
                 .unwrap(),
             (true, 26208)
         );
-
-        if data_page.zero_copy {
-            destroy_fixed_length_plain_data_page_v1(data_page);
-        }
     }
 
     #[test]
     fn test_read_outside_of_data_page_filter() {
         let path = String::from("src/sample_files/linitem_plain_data_page");
         let (data_page, _buffer): (Result<FixedLengthPlainDataPageReaderV1<i64>, _>, _) =
-            load_non_null_plain_data_page(100, path);
+            load_non_null_plain_data_page(100, &path);
         assert!(data_page.is_ok());
         let data_page = data_page.unwrap();
         let to_read = RowRange::new(
@@ -980,6 +988,8 @@ mod tests {
         let mut raw_bridge = RawBridge::new(false, capacity);
         let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
         assert!(res.is_ok());
+        assert_eq!(res.unwrap(), true);
+
         assert_eq!(raw_bridge.get_size(), 10);
 
         assert_eq!(
@@ -1082,9 +1092,5 @@ mod tests {
                 .unwrap(),
             (true, 26208)
         );
-
-        if data_page.zero_copy {
-            destroy_fixed_length_plain_data_page_v1(data_page);
-        }
     }
 }

@@ -33,6 +33,15 @@ pub struct FixedLengthDictionary<T> {
     zero_copy: bool,
 }
 
+impl<T> Drop for FixedLengthDictionary<T> {
+    fn drop(&mut self) {
+        let data = mem::take(&mut self.dictionary);
+        if self.is_zero_copied() {
+            mem::forget(data);
+        }
+    }
+}
+
 #[allow(dead_code)]
 impl<T: ToString> std::fmt::Display for FixedLengthDictionary<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -51,15 +60,15 @@ impl<T: ToString> std::fmt::Display for FixedLengthDictionary<T> {
     }
 }
 
-impl<T: std::marker::Copy> DictionaryPage<T> for FixedLengthDictionary<T> {
+impl<T> DictionaryPage<T> for FixedLengthDictionary<T> {
     #[inline(always)]
     fn validate(&self, _index: usize) -> bool {
         true
     }
 
     #[inline(always)]
-    fn find(&self, index: usize) -> T {
-        self.dictionary[index]
+    fn find(&self, index: usize) -> &T {
+        &self.dictionary[index]
     }
 
     fn get_num_values(&self) -> usize {
@@ -69,6 +78,10 @@ impl<T: std::marker::Copy> DictionaryPage<T> for FixedLengthDictionary<T> {
     #[inline(always)]
     fn get_type_size(&self) -> usize {
         self.type_size
+    }
+
+    fn is_zero_copied(&self) -> bool {
+        self.zero_copy
     }
 }
 
@@ -127,19 +140,13 @@ impl<T> FixedLengthDictionary<T> {
     }
 }
 
-#[allow(dead_code)]
-#[inline(always)]
-pub fn destroy_dictionary<T>(dictionary: FixedLengthDictionary<T>) {
-    mem::forget(dictionary.dictionary);
-}
-
 #[cfg(test)]
 mod tests {
     use std::mem;
 
     use crate::metadata::page_header::read_page_header;
     use crate::page_reader::dictionary_page::fixed_length_dictionary_page::{
-        destroy_dictionary, DictionaryPage, FixedLengthDictionary,
+        DictionaryPage, FixedLengthDictionary,
     };
     use crate::utils::byte_buffer_base::ByteBufferBase;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
@@ -149,7 +156,7 @@ mod tests {
     use crate::utils::local_file_loader::LocalFileLoader;
 
     fn load_parquet_first_dictionary_page<T>(
-        path: String,
+        path: &String,
     ) -> (
         Result<FixedLengthDictionary<T>, BoltReaderError>,
         DirectByteBuffer,
@@ -192,22 +199,43 @@ mod tests {
             buf,
         )
     }
+    #[test]
+    fn test_create_and_drop_dictionary_page() {
+        let path = String::from("src/sample_files/lineitem_dictionary.parquet");
+        let (dic, _buffer): (Result<FixedLengthDictionary<i64>, _>, _) =
+            load_parquet_first_dictionary_page(&path);
+        assert!(dic.is_ok());
+        let dictionary_zero_copy = dic.unwrap();
+
+        let res = LocalFileLoader::new(&path);
+        assert!(res.is_ok());
+        let file = res.unwrap();
+        let (dic, _buffer): (Result<FixedLengthDictionary<i64>, _>, _) =
+            load_parquet_first_dictionary_page_streaming_buffer(&file, 16);
+        assert!(dic.is_ok());
+        let dictionary_deep_copy = dic.unwrap();
+
+        assert_eq!(dictionary_zero_copy.is_zero_copied(), true);
+        assert_eq!(dictionary_deep_copy.is_zero_copied(), false);
+
+        // Both deep copy and zero dictionary page should be safely release at this point.
+    }
 
     #[test]
     fn test_load_dictionary_page() {
         let path = String::from("src/sample_files/lineitem_dictionary.parquet");
         let (dic, buffer): (Result<FixedLengthDictionary<i64>, _>, _) =
-            load_parquet_first_dictionary_page(path);
+            load_parquet_first_dictionary_page(&path);
         assert!(dic.is_ok());
         let dictionary = dic.unwrap();
 
         assert_eq!(dictionary.get_type_size(), 8);
 
-        assert_eq!(dictionary.find(0), 429);
-        assert_eq!(dictionary.find(1), 54914);
-        assert_eq!(dictionary.find(2), 54915);
-        assert_eq!(dictionary.find(3), 54916);
-        assert_eq!(dictionary.find(4), 54917);
+        assert_eq!(*dictionary.find(0), 429);
+        assert_eq!(*dictionary.find(1), 54914);
+        assert_eq!(*dictionary.find(2), 54915);
+        assert_eq!(*dictionary.find(3), 54916);
+        assert_eq!(*dictionary.find(4), 54917);
 
         assert_eq!(dictionary.validate(0), true);
         assert_eq!(dictionary.validate(1), true);
@@ -218,10 +246,6 @@ mod tests {
         assert_eq!(dictionary.get_num_values(), 2921);
 
         assert_eq!(buffer.get_rpos(), 19 + 2921 * 8);
-
-        if dictionary.zero_copy {
-            destroy_dictionary(dictionary);
-        }
     }
 
     #[test]
@@ -240,11 +264,11 @@ mod tests {
 
             assert_eq!(dictionary.get_type_size(), 8);
 
-            assert_eq!(dictionary.find(0), 429);
-            assert_eq!(dictionary.find(1), 54914);
-            assert_eq!(dictionary.find(2), 54915);
-            assert_eq!(dictionary.find(3), 54916);
-            assert_eq!(dictionary.find(4), 54917);
+            assert_eq!(*dictionary.find(0), 429);
+            assert_eq!(*dictionary.find(1), 54914);
+            assert_eq!(*dictionary.find(2), 54915);
+            assert_eq!(*dictionary.find(3), 54916);
+            assert_eq!(*dictionary.find(4), 54917);
 
             assert_eq!(dictionary.validate(0), true);
             assert_eq!(dictionary.validate(1), true);
@@ -255,10 +279,6 @@ mod tests {
             assert_eq!(dictionary.get_num_values(), 2921);
 
             assert_eq!(buffer.get_rpos(), 19 + 2921 * 8);
-
-            if dictionary.zero_copy {
-                destroy_dictionary(dictionary);
-            }
         }
     }
 
@@ -266,7 +286,7 @@ mod tests {
     fn test_load_incorrect_dictionary_page() {
         let path = String::from("src/sample_files/lineitem.parquet");
         let (dic, _buffer): (Result<FixedLengthDictionary<i64>, _>, _) =
-            load_parquet_first_dictionary_page(path);
+            load_parquet_first_dictionary_page(&path);
 
         assert!(dic.is_err());
     }

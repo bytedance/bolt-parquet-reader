@@ -74,8 +74,8 @@ impl<T: std::marker::Copy> DictionaryPage<T> for FixedLengthDictionaryWithFilter
     }
 
     #[inline(always)]
-    fn find(&self, index: usize) -> T {
-        self.dictionary[index].value
+    fn find(&self, index: usize) -> &T {
+        &self.dictionary[index].value
     }
 
     fn get_num_values(&self) -> usize {
@@ -85,6 +85,10 @@ impl<T: std::marker::Copy> DictionaryPage<T> for FixedLengthDictionaryWithFilter
     #[inline(always)]
     fn get_type_size(&self) -> usize {
         self.type_size
+    }
+
+    fn is_zero_copied(&self) -> bool {
+        false
     }
 }
 
@@ -275,11 +279,11 @@ mod tests {
 
         assert_eq!(dictionary.get_type_size(), 8);
 
-        assert_eq!(dictionary.find(0), 429);
-        assert_eq!(dictionary.find(1), 54914);
-        assert_eq!(dictionary.find(2), 54915);
-        assert_eq!(dictionary.find(3), 54916);
-        assert_eq!(dictionary.find(4), 54917);
+        assert_eq!(*dictionary.find(0), 429);
+        assert_eq!(*dictionary.find(1), 54914);
+        assert_eq!(*dictionary.find(2), 54915);
+        assert_eq!(*dictionary.find(3), 54916);
+        assert_eq!(*dictionary.find(4), 54917);
 
         assert_eq!(dictionary.validate(0), false);
         assert_eq!(dictionary.validate(1), true);
@@ -309,11 +313,11 @@ mod tests {
 
             assert_eq!(dictionary.get_type_size(), 8);
 
-            assert_eq!(dictionary.find(0), 429);
-            assert_eq!(dictionary.find(1), 54914);
-            assert_eq!(dictionary.find(2), 54915);
-            assert_eq!(dictionary.find(3), 54916);
-            assert_eq!(dictionary.find(4), 54917);
+            assert_eq!(*dictionary.find(0), 429);
+            assert_eq!(*dictionary.find(1), 54914);
+            assert_eq!(*dictionary.find(2), 54915);
+            assert_eq!(*dictionary.find(3), 54916);
+            assert_eq!(*dictionary.find(4), 54917);
 
             assert_eq!(dictionary.validate(0), false);
             assert_eq!(dictionary.validate(1), true);
