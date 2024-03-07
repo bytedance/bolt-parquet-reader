@@ -14,10 +14,12 @@
 // limitations under the License.
 
 use std::cmp::min;
+use std::fs::File;
 use std::intrinsics::unlikely;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::mem;
 
+use crate::convert_generic_vec;
 use crate::utils::byte_buffer_base::ByteBufferBase;
 use crate::utils::direct_byte_buffer::{Buffer, ByteBufferSlice, DirectByteBuffer};
 use crate::utils::exceptions::BoltReaderError;
@@ -26,6 +28,7 @@ use crate::utils::file_loader::LoadFile;
 pub struct StreamingByteBuffer<'a> {
     buffer: DirectByteBuffer,
     source: &'a dyn LoadFile,
+    direct_buffer_size: usize,
     buffer_offset: usize,
     file_offset: usize,
     total_size: usize,
@@ -48,7 +51,7 @@ pub trait FileStreamingBuffer {
 
     fn get_total_size(&self) -> usize;
 
-    fn reload(&mut self, start: usize, loading_size: usize) -> Result<(), BoltReaderError>;
+    fn reload(&mut self, start: usize) -> Result<(), BoltReaderError>;
 }
 
 impl FileStreamingBuffer for StreamingByteBuffer<'_> {
@@ -63,9 +66,12 @@ impl FileStreamingBuffer for StreamingByteBuffer<'_> {
             file_offset,
             min(buffer_size, min(length, source.get_file_size())),
         )?;
+
+        let direct_buffer_size = buffer.len();
         Ok(StreamingByteBuffer {
             buffer,
             source,
+            direct_buffer_size,
             buffer_offset: 0,
             file_offset,
             total_size: min(length, source.get_file_size()) - file_offset,
@@ -94,15 +100,27 @@ impl FileStreamingBuffer for StreamingByteBuffer<'_> {
     }
 
     #[inline(always)]
-    fn reload(&mut self, start: usize, loading_size: usize) -> Result<(), BoltReaderError> {
-        let to_load = min(self.get_total_size() - start, loading_size);
+    fn reload(&mut self, start: usize) -> Result<(), BoltReaderError> {
+        let to_load = min(self.get_total_size() - start, self.buffer_size);
+
+        self.buffer.set_rpos(0);
+        self.direct_buffer_size = to_load;
+
+        if to_load == 0 {
+            return Ok(());
+        }
+
         self.buffer_offset = start;
 
-        // TODO: The buffer reloading requires dropping and re-initiating. This is because the ByteBuffer does not support expose mut &[u8]. The ByteBuffer will be refactored to enable it.
+        let offset = start + self.file_offset;
+        let path = self.source.get_file_path();
+        let mut file = File::open(path)?;
+        file.seek(SeekFrom::Start(offset as u64))?;
+        let slice = self.buffer.create_buffer_slice(0, to_load)?;
+        let mut vec = unsafe { convert_generic_vec!(slice, mem::size_of::<u8>(), u8) };
+        file.read_exact(&mut vec)?;
 
-        let buffer =
-            DirectByteBuffer::from_file(self.get_source(), start + self.file_offset, to_load)?;
-        self.update_buffer(buffer);
+        mem::forget(vec);
 
         Ok(())
     }
@@ -118,15 +136,12 @@ impl Read for StreamingByteBuffer<'_> {
 
         let mut reading_offset = 0;
         while remaining > 0 {
-            if self.buffer.get_rpos() == self.buffer.len() {
-                let _ = self.reload(
-                    self.buffer.get_rpos() + self.buffer_offset,
-                    self.buffer_size,
-                );
+            if self.buffer.get_rpos() == self.direct_buffer_size {
+                let _ = self.reload(self.buffer.get_rpos() + self.buffer_offset);
             }
             let to_read = min(
                 remaining,
-                min(self.buffer.len() - self.buffer.get_rpos(), read_len),
+                min(self.direct_buffer_size - self.buffer.get_rpos(), read_len),
             );
             for i in 0..to_read {
                 buf[i + reading_offset] = self.buffer.read_u8()?;
@@ -143,7 +158,7 @@ impl Read for StreamingByteBuffer<'_> {
 impl ByteBufferBase for StreamingByteBuffer<'_> {
     #[inline(always)]
     fn can_create_buffer_slice(&self, start: usize, len: usize) -> bool {
-        start >= self.buffer_offset && start + len <= self.buffer_offset + self.buffer.len()
+        start >= self.buffer_offset && start + len <= self.buffer_offset + self.direct_buffer_size
     }
 
     fn create_buffer_slice(
@@ -157,11 +172,11 @@ impl ByteBufferBase for StreamingByteBuffer<'_> {
             )));
         }
         let end = start + len;
-        if start < self.buffer_offset || end > self.buffer_offset + self.buffer.len() {
+        if start < self.buffer_offset || end > self.buffer_offset + self.direct_buffer_size {
             return Err(BoltReaderError::InternalError(format!(
                 "Slice out of DirectByteBuffer, file file_offset: {} size: {} bytes; Slice: [{}, {})",
                 self.file_offset,
-                self.buffer.len(),
+                self.direct_buffer_size,
                 start,
                 end
             )));
@@ -171,7 +186,7 @@ impl ByteBufferBase for StreamingByteBuffer<'_> {
     }
 
     fn get_direct_byte_buffer(&mut self) -> &mut DirectByteBuffer {
-        let _ = self.reload(self.buffer.get_rpos(), self.buffer_size);
+        let _ = self.reload(self.buffer.get_rpos());
         &mut self.buffer
     }
 
@@ -183,21 +198,17 @@ impl ByteBufferBase for StreamingByteBuffer<'_> {
     #[inline(always)]
     fn set_rpos(&mut self, pos: usize) {
         let rpos = min(pos, self.total_size);
-        if rpos >= self.buffer_offset && pos < self.buffer_offset + self.buffer.len() {
+        if rpos >= self.buffer_offset && pos < self.buffer_offset + self.direct_buffer_size {
             self.buffer.set_rpos(pos - self.buffer_offset);
         } else {
-            self.reload(rpos, self.buffer_size)
-                .expect("Set rpos out of boundary");
+            self.reload(rpos).expect("Set rpos out of boundary");
         }
     }
 
     #[inline(always)]
     fn read_u8(&mut self) -> Result<u8, BoltReaderError> {
-        if unlikely(self.buffer.len() - self.buffer.get_rpos() < 1) {
-            self.reload(
-                self.buffer.get_rpos() + self.buffer_offset,
-                self.buffer_size,
-            )?;
+        if unlikely(self.direct_buffer_size - self.buffer.get_rpos() < 1) {
+            self.reload(self.buffer.get_rpos() + self.buffer_offset)?;
         }
         match self.buffer.read_u8() {
             Ok(res) => Ok(res),
@@ -209,11 +220,8 @@ impl ByteBufferBase for StreamingByteBuffer<'_> {
 
     #[inline(always)]
     fn read_u32(&mut self) -> Result<u32, BoltReaderError> {
-        if unlikely(self.buffer.len() - self.buffer.get_rpos() < 4) {
-            self.reload(
-                self.buffer.get_rpos() + self.buffer_offset,
-                self.buffer_size,
-            )?;
+        if unlikely(self.direct_buffer_size - self.buffer.get_rpos() < 4) {
+            self.reload(self.buffer.get_rpos() + self.buffer_offset)?;
         }
         match self.buffer.read_u32() {
             Ok(res) => Ok(res),
@@ -250,8 +258,10 @@ impl ByteBufferBase for StreamingByteBuffer<'_> {
             )));
         }
 
-        if start < self.buffer_offset || start + length > self.buffer_offset + self.buffer.len() {
-            self.reload(start, self.buffer_size)?;
+        if start < self.buffer_offset
+            || start + length > self.buffer_offset + self.direct_buffer_size
+        {
+            self.reload(start)?;
         } else {
             self.buffer.set_rpos(start % self.buffer_size);
         }
@@ -261,16 +271,13 @@ impl ByteBufferBase for StreamingByteBuffer<'_> {
         let mut remaining = length;
         let mut vec: Vec<u8> = Vec::with_capacity(length);
         while remaining > 0 {
-            let to_load = min(remaining, self.buffer.len() - self.buffer.get_rpos());
+            let to_load = min(remaining, self.direct_buffer_size - self.buffer.get_rpos());
             let slice = self.create_buffer_slice(begin, to_load)?;
 
             vec.extend_from_slice(slice);
             self.buffer.set_rpos(self.buffer.get_rpos() + to_load);
-            if self.buffer.get_rpos() == self.buffer.len() {
-                self.reload(
-                    self.buffer.get_rpos() + self.buffer_offset,
-                    self.buffer_size,
-                )?;
+            if self.buffer.get_rpos() == self.direct_buffer_size {
+                self.reload(self.buffer.get_rpos() + self.buffer_offset)?;
             }
             begin += to_load;
             remaining -= to_load;
