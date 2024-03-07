@@ -307,12 +307,15 @@ impl<'a, T: 'static + std::marker::Copy> FixedLengthColumnReader<'a, T> {
                 def_rle_bp,
             )?;
 
+            let data_size =
+                page_header.uncompressed_page_size - (self.buffer.get_rpos() - rpos) as i32;
             self.current_data_page = Some(FixedLengthPlainDataPageReaderV1::new(
                 page_header,
                 self.buffer,
                 self.data_page_offset,
                 self.type_size,
                 validity.0,
+                data_size as usize,
                 self.filter,
                 validity.1,
             )?);
