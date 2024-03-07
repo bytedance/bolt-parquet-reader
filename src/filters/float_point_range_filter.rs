@@ -51,6 +51,11 @@ impl FixedLengthRangeFilter for FloatPointRangeFilter {
     }
 
     #[inline(always)]
+    fn check_null(&self, validity: bool) -> bool {
+        validity || self.null_allowed
+    }
+
+    #[inline(always)]
     fn check_f64(&self, val: f64) -> bool {
         ((!self.upper_bounded)
             || (val < self.upper_f64)
@@ -68,6 +73,16 @@ impl FixedLengthRangeFilter for FloatPointRangeFilter {
             && ((!self.lower_bounded)
                 || (val > self.lower_f32)
                 || (self.lower_included && val == self.lower_f32))
+    }
+
+    #[inline(always)]
+    fn check_f64_with_validity(&self, value: f64, validity: bool) -> bool {
+        (validity && self.check_f64(value)) || (self.null_allowed && !validity)
+    }
+
+    #[inline(always)]
+    fn check_f32_with_validity(&self, value: f32, validity: bool) -> bool {
+        (validity && self.check_f32(value)) || (self.null_allowed && !validity)
     }
 
     #[inline(always)]
@@ -239,6 +254,17 @@ mod tests {
     }
 
     #[test]
+    fn test_null() {
+        let nullable_filter = FloatPointRangeFilter::new(1.0, 2.0, true, false, true, false, true);
+
+        assert_eq!(nullable_filter.check_null(true), true);
+        assert_eq!(nullable_filter.check_null(false), true);
+        let non_null_filter = FloatPointRangeFilter::new(1.0, 2.0, true, false, true, false, false);
+        assert_eq!(non_null_filter.check_null(true), true);
+        assert_eq!(non_null_filter.check_null(false), false);
+    }
+
+    #[test]
     fn test_float_point_filter_f64_bounds() {
         let filter = FloatPointRangeFilter::new(1.0, 2.0, false, false, false, false, false);
 
@@ -266,36 +292,6 @@ mod tests {
         assert_eq!(filter.check_f64(1.5), true);
         assert_eq!(filter.check_f64(2.0), false);
         assert_eq!(filter.check_f64(2.5), false);
-    }
-
-    #[test]
-    fn test_float_point_filter_f32_bounds() {
-        let filter = FloatPointRangeFilter::new(1.0, 2.0, false, false, false, false, false);
-
-        assert_eq!(filter.check_f32(0.0), true);
-        assert_eq!(filter.check_f32(0.5), true);
-        assert_eq!(filter.check_f32(1.0), true);
-        assert_eq!(filter.check_f32(1.5), true);
-        assert_eq!(filter.check_f32(2.0), true);
-        assert_eq!(filter.check_f32(2.5), true);
-
-        let filter = FloatPointRangeFilter::new(1.0, 2.0, true, false, false, false, false);
-
-        assert_eq!(filter.check_f32(0.0), false);
-        assert_eq!(filter.check_f32(0.5), false);
-        assert_eq!(filter.check_f32(1.0), false);
-        assert_eq!(filter.check_f32(1.5), true);
-        assert_eq!(filter.check_f32(2.0), true);
-        assert_eq!(filter.check_f32(2.5), true);
-
-        let filter = FloatPointRangeFilter::new(1.0, 2.0, false, true, false, false, false);
-
-        assert_eq!(filter.check_f32(0.0), true);
-        assert_eq!(filter.check_f32(0.5), true);
-        assert_eq!(filter.check_f32(1.0), true);
-        assert_eq!(filter.check_f32(1.5), true);
-        assert_eq!(filter.check_f32(2.0), false);
-        assert_eq!(filter.check_f32(2.5), false);
     }
 
     #[test]
@@ -347,6 +343,71 @@ mod tests {
     }
 
     #[test]
+    fn test_nullable_float_point_filter_f64() {
+        let nullable_filter = FloatPointRangeFilter::new(1.0, 2.0, true, false, true, false, true);
+
+        assert_eq!(nullable_filter.check_f64_with_validity(0.0, true), false);
+        assert_eq!(nullable_filter.check_f64_with_validity(0.5, true), false);
+        assert_eq!(nullable_filter.check_f64_with_validity(1.0, true), true);
+        assert_eq!(nullable_filter.check_f64_with_validity(1.5, true), true);
+        assert_eq!(nullable_filter.check_f64_with_validity(2.0, true), true);
+        assert_eq!(nullable_filter.check_f64_with_validity(2.5, true), true);
+
+        assert_eq!(nullable_filter.check_f64_with_validity(0.0, false), true);
+        assert_eq!(nullable_filter.check_f64_with_validity(0.5, false), true);
+        assert_eq!(nullable_filter.check_f64_with_validity(1.0, false), true);
+        assert_eq!(nullable_filter.check_f64_with_validity(1.5, false), true);
+        assert_eq!(nullable_filter.check_f64_with_validity(2.0, false), true);
+        assert_eq!(nullable_filter.check_f64_with_validity(2.5, false), true);
+
+        let non_null_filter = FloatPointRangeFilter::new(1.0, 2.0, true, false, true, false, false);
+
+        assert_eq!(non_null_filter.check_f64_with_validity(0.0, true), false);
+        assert_eq!(non_null_filter.check_f64_with_validity(0.5, true), false);
+        assert_eq!(non_null_filter.check_f64_with_validity(1.0, true), true);
+        assert_eq!(non_null_filter.check_f64_with_validity(1.5, true), true);
+        assert_eq!(non_null_filter.check_f64_with_validity(2.0, true), true);
+        assert_eq!(non_null_filter.check_f64_with_validity(2.5, true), true);
+
+        assert_eq!(non_null_filter.check_f64_with_validity(0.0, false), false);
+        assert_eq!(non_null_filter.check_f64_with_validity(0.5, false), false);
+        assert_eq!(non_null_filter.check_f64_with_validity(1.0, false), false);
+        assert_eq!(non_null_filter.check_f64_with_validity(1.5, false), false);
+        assert_eq!(non_null_filter.check_f64_with_validity(2.0, false), false);
+        assert_eq!(non_null_filter.check_f64_with_validity(2.5, false), false);
+    }
+
+    #[test]
+    fn test_float_point_filter_f32_bounds() {
+        let filter = FloatPointRangeFilter::new(1.0, 2.0, false, false, false, false, false);
+
+        assert_eq!(filter.check_f32(0.0), true);
+        assert_eq!(filter.check_f32(0.5), true);
+        assert_eq!(filter.check_f32(1.0), true);
+        assert_eq!(filter.check_f32(1.5), true);
+        assert_eq!(filter.check_f32(2.0), true);
+        assert_eq!(filter.check_f32(2.5), true);
+
+        let filter = FloatPointRangeFilter::new(1.0, 2.0, true, false, false, false, false);
+
+        assert_eq!(filter.check_f32(0.0), false);
+        assert_eq!(filter.check_f32(0.5), false);
+        assert_eq!(filter.check_f32(1.0), false);
+        assert_eq!(filter.check_f32(1.5), true);
+        assert_eq!(filter.check_f32(2.0), true);
+        assert_eq!(filter.check_f32(2.5), true);
+
+        let filter = FloatPointRangeFilter::new(1.0, 2.0, false, true, false, false, false);
+
+        assert_eq!(filter.check_f32(0.0), true);
+        assert_eq!(filter.check_f32(0.5), true);
+        assert_eq!(filter.check_f32(1.0), true);
+        assert_eq!(filter.check_f32(1.5), true);
+        assert_eq!(filter.check_f32(2.0), false);
+        assert_eq!(filter.check_f32(2.5), false);
+    }
+
+    #[test]
     fn test_float_point_filter_f32_includes() {
         let filter = FloatPointRangeFilter::new(1.0, 2.0, true, false, true, false, false);
 
@@ -392,6 +453,41 @@ mod tests {
         assert_eq!(filter.check_f32(1.5), true);
         assert_eq!(filter.check_f32(2.0), true);
         assert_eq!(filter.check_f32(2.5), false);
+    }
+
+    #[test]
+    fn test_nullable_float_point_filter_f32() {
+        let nullable_filter = FloatPointRangeFilter::new(1.0, 2.0, true, false, true, false, true);
+
+        assert_eq!(nullable_filter.check_f32_with_validity(0.0, true), false);
+        assert_eq!(nullable_filter.check_f32_with_validity(0.5, true), false);
+        assert_eq!(nullable_filter.check_f32_with_validity(1.0, true), true);
+        assert_eq!(nullable_filter.check_f32_with_validity(1.5, true), true);
+        assert_eq!(nullable_filter.check_f32_with_validity(2.0, true), true);
+        assert_eq!(nullable_filter.check_f32_with_validity(2.5, true), true);
+
+        assert_eq!(nullable_filter.check_f32_with_validity(0.0, false), true);
+        assert_eq!(nullable_filter.check_f32_with_validity(0.5, false), true);
+        assert_eq!(nullable_filter.check_f32_with_validity(1.0, false), true);
+        assert_eq!(nullable_filter.check_f32_with_validity(1.5, false), true);
+        assert_eq!(nullable_filter.check_f32_with_validity(2.0, false), true);
+        assert_eq!(nullable_filter.check_f32_with_validity(2.5, false), true);
+
+        let non_null_filter = FloatPointRangeFilter::new(1.0, 2.0, true, false, true, false, false);
+
+        assert_eq!(non_null_filter.check_f32_with_validity(0.0, true), false);
+        assert_eq!(non_null_filter.check_f32_with_validity(0.5, true), false);
+        assert_eq!(non_null_filter.check_f32_with_validity(1.0, true), true);
+        assert_eq!(non_null_filter.check_f32_with_validity(1.5, true), true);
+        assert_eq!(non_null_filter.check_f32_with_validity(2.0, true), true);
+        assert_eq!(non_null_filter.check_f32_with_validity(2.5, true), true);
+
+        assert_eq!(non_null_filter.check_f32_with_validity(0.0, false), false);
+        assert_eq!(non_null_filter.check_f32_with_validity(0.5, false), false);
+        assert_eq!(non_null_filter.check_f32_with_validity(1.0, false), false);
+        assert_eq!(non_null_filter.check_f32_with_validity(1.5, false), false);
+        assert_eq!(non_null_filter.check_f32_with_validity(2.0, false), false);
+        assert_eq!(non_null_filter.check_f32_with_validity(2.5, false), false);
     }
 
     #[test]

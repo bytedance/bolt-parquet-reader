@@ -52,6 +52,11 @@ impl FixedLengthRangeFilter for IntegerRangeFilter {
     }
 
     #[inline(always)]
+    fn check_null(&self, validity: bool) -> bool {
+        validity || self.null_allowed
+    }
+
+    #[inline(always)]
     fn check_i32(&self, value: i32) -> bool {
         !self.always_false_i32 && value >= self.lower_i32 && value <= self.upper_i32
     }
@@ -64,6 +69,21 @@ impl FixedLengthRangeFilter for IntegerRangeFilter {
     #[inline(always)]
     fn check_i128(&self, value: i128) -> bool {
         value >= self.lower_i128 && value <= self.upper_i128
+    }
+
+    #[inline(always)]
+    fn check_i32_with_validity(&self, value: i32, validity: bool) -> bool {
+        (validity && self.check_i32(value)) || (self.null_allowed && !validity)
+    }
+
+    #[inline(always)]
+    fn check_i64_with_validity(&self, value: i64, validity: bool) -> bool {
+        (validity && self.check_i64(value)) || (self.null_allowed && !validity)
+    }
+
+    #[inline(always)]
+    fn check_i128_with_validity(&self, value: i128, validity: bool) -> bool {
+        (validity && self.check_i128(value)) || (self.null_allowed && !validity)
     }
 
     #[inline(always)]
@@ -173,6 +193,16 @@ mod tests {
     }
 
     #[test]
+    fn test_null() {
+        let nullable_filter = IntegerRangeFilter::new(i128::MAX / 2, i128::MAX - 1, true);
+        assert_eq!(nullable_filter.check_null(true), true);
+        assert_eq!(nullable_filter.check_null(false), true);
+        let non_null_filter = IntegerRangeFilter::new(i128::MAX / 2, i128::MAX - 1, false);
+        assert_eq!(non_null_filter.check_null(true), true);
+        assert_eq!(non_null_filter.check_null(false), false);
+    }
+
+    #[test]
     fn test_integer_filter_i128() {
         let filter =
             integer_range_filter::IntegerRangeFilter::new(i128::MAX / 2, i128::MAX - 1, true);
@@ -180,6 +210,67 @@ mod tests {
         assert_eq!(filter.check_i128(i128::MAX / 2 + 1), true);
         assert_eq!(filter.check_i64(i64::MAX / 2 + 1), false);
         assert_eq!(filter.check_i32(i32::MAX / 2 + 1), false);
+    }
+
+    #[test]
+    fn test_nullable_integer_filter_i128() {
+        let nullable_filter =
+            integer_range_filter::IntegerRangeFilter::new(i128::MAX / 2, i128::MAX - 1, true);
+
+        assert_eq!(
+            nullable_filter.check_i128_with_validity(i128::MAX / 2 + 1, true),
+            true
+        );
+        assert_eq!(
+            nullable_filter.check_i64_with_validity(i64::MAX / 2 + 1, true),
+            false
+        );
+        assert_eq!(
+            nullable_filter.check_i32_with_validity(i32::MAX / 2 + 1, true),
+            false
+        );
+
+        assert_eq!(
+            nullable_filter.check_i128_with_validity(i128::MAX / 2 + 1, false),
+            true
+        );
+        assert_eq!(
+            nullable_filter.check_i64_with_validity(i64::MAX / 2 + 1, false),
+            true
+        );
+        assert_eq!(
+            nullable_filter.check_i32_with_validity(i32::MAX / 2 + 1, false),
+            true
+        );
+
+        let non_null_filter =
+            integer_range_filter::IntegerRangeFilter::new(i128::MAX / 2, i128::MAX - 1, false);
+
+        assert_eq!(
+            non_null_filter.check_i128_with_validity(i128::MAX / 2 + 1, true),
+            true
+        );
+        assert_eq!(
+            non_null_filter.check_i64_with_validity(i64::MAX / 2 + 1, true),
+            false
+        );
+        assert_eq!(
+            non_null_filter.check_i32_with_validity(i32::MAX / 2 + 1, true),
+            false
+        );
+
+        assert_eq!(
+            non_null_filter.check_i128_with_validity(i128::MAX / 2 + 1, false),
+            false
+        );
+        assert_eq!(
+            non_null_filter.check_i64_with_validity(i64::MAX / 2 + 1, false),
+            false
+        );
+        assert_eq!(
+            non_null_filter.check_i32_with_validity(i32::MAX / 2 + 1, false),
+            false
+        );
     }
 
     #[test]
@@ -196,6 +287,73 @@ mod tests {
     }
 
     #[test]
+    fn test_nullable_integer_filter_i64() {
+        let nullable_filter = integer_range_filter::IntegerRangeFilter::new(
+            (i64::MAX / 2) as i128,
+            (i64::MAX - 1) as i128,
+            true,
+        );
+
+        assert_eq!(
+            nullable_filter.check_i128_with_validity(i128::MAX / 2 + 1, true),
+            false
+        );
+        assert_eq!(
+            nullable_filter.check_i64_with_validity(i64::MAX / 2 + 1, true),
+            true
+        );
+        assert_eq!(
+            nullable_filter.check_i32_with_validity(i32::MAX / 2 + 1, true),
+            false
+        );
+
+        assert_eq!(
+            nullable_filter.check_i128_with_validity(i128::MAX / 2 + 1, false),
+            true
+        );
+        assert_eq!(
+            nullable_filter.check_i64_with_validity(i64::MAX / 2 + 1, false),
+            true
+        );
+        assert_eq!(
+            nullable_filter.check_i32_with_validity(i32::MAX / 2 + 1, false),
+            true
+        );
+
+        let non_null_filter = integer_range_filter::IntegerRangeFilter::new(
+            (i64::MAX / 2) as i128,
+            (i64::MAX - 1) as i128,
+            false,
+        );
+
+        assert_eq!(
+            nullable_filter.check_i128_with_validity(i128::MAX / 2 + 1, true),
+            false
+        );
+        assert_eq!(
+            nullable_filter.check_i64_with_validity(i64::MAX / 2 + 1, true),
+            true
+        );
+        assert_eq!(
+            nullable_filter.check_i32_with_validity(i32::MAX / 2 + 1, true),
+            false
+        );
+
+        assert_eq!(
+            non_null_filter.check_i128_with_validity(i128::MAX / 2 + 1, false),
+            false
+        );
+        assert_eq!(
+            non_null_filter.check_i64_with_validity(i64::MAX / 2 + 1, false),
+            false
+        );
+        assert_eq!(
+            non_null_filter.check_i32_with_validity(i32::MAX / 2 + 1, false),
+            false
+        );
+    }
+
+    #[test]
     fn test_integer_filter_i32() {
         let filter = integer_range_filter::IntegerRangeFilter::new(
             (i32::MAX / 2) as i128,
@@ -206,6 +364,73 @@ mod tests {
         assert_eq!(filter.check_i128(i128::MAX / 2 + 1), false);
         assert_eq!(filter.check_i64(i64::MAX / 2 + 1), false);
         assert_eq!(filter.check_i32(i32::MAX / 2 + 1), true);
+    }
+
+    #[test]
+    fn test_nullable_integer_filter_i32() {
+        let nullable_filter = integer_range_filter::IntegerRangeFilter::new(
+            (i32::MAX / 2) as i128,
+            (i32::MAX - 1) as i128,
+            true,
+        );
+
+        assert_eq!(
+            nullable_filter.check_i128_with_validity(i128::MAX / 2 + 1, true),
+            false
+        );
+        assert_eq!(
+            nullable_filter.check_i64_with_validity(i64::MAX / 2 + 1, true),
+            false
+        );
+        assert_eq!(
+            nullable_filter.check_i32_with_validity(i32::MAX / 2 + 1, true),
+            true
+        );
+
+        assert_eq!(
+            nullable_filter.check_i128_with_validity(i128::MAX / 2 + 1, false),
+            true
+        );
+        assert_eq!(
+            nullable_filter.check_i64_with_validity(i64::MAX / 2 + 1, false),
+            true
+        );
+        assert_eq!(
+            nullable_filter.check_i32_with_validity(i32::MAX / 2 + 1, false),
+            true
+        );
+
+        let non_null_filter = integer_range_filter::IntegerRangeFilter::new(
+            (i32::MAX / 2) as i128,
+            (i32::MAX - 1) as i128,
+            false,
+        );
+
+        assert_eq!(
+            nullable_filter.check_i128_with_validity(i128::MAX / 2 + 1, true),
+            false
+        );
+        assert_eq!(
+            nullable_filter.check_i64_with_validity(i64::MAX / 2 + 1, true),
+            false
+        );
+        assert_eq!(
+            nullable_filter.check_i32_with_validity(i32::MAX / 2 + 1, true),
+            true
+        );
+
+        assert_eq!(
+            non_null_filter.check_i128_with_validity(i128::MAX / 2 + 1, false),
+            false
+        );
+        assert_eq!(
+            non_null_filter.check_i64_with_validity(i64::MAX / 2 + 1, false),
+            false
+        );
+        assert_eq!(
+            non_null_filter.check_i32_with_validity(i32::MAX / 2 + 1, false),
+            false
+        );
     }
 
     #[test]
