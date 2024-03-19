@@ -36,11 +36,11 @@ git clone https://github.com/bytedance/bolt-parquet-reader.git
 
 ### 2. Compile and Execute
 ```
-cargo +nightly fmt --all
-cargo +nightly fmt --all -- --check
-cargo +nightly build --package bolt-parquet-reader --lib
-cargo +nightly test --verbose
-cargo +nightly clippy --verbose
+cargo fmt --all
+cargo fmt --all -- --check
+cargo build --package bolt-parquet-reader --lib
+cargo test --verbose
+cargo clippy --verbose
 ```
 
 # License
