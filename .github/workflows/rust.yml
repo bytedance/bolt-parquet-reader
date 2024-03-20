@@ -17,7 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Use Rust Nightly
-      run: rustup install nightly && rustup default nightly
+      run: rustup install nightly
     - name: Format Check
       run: cargo fmt --all -- --check
     - name: Build
