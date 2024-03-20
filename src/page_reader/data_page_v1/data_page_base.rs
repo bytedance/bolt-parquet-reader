@@ -16,8 +16,9 @@
 use std::cmp::{max, min};
 use std::intrinsics::unlikely;
 
+use crate::bridge::bridge_base::Bridge;
 use crate::utils::exceptions::BoltReaderError;
-use crate::utils::row_range_set::RowRange;
+use crate::utils::row_range_set::{RowRange, RowRangeSet};
 
 pub trait DataPage<T> {
     fn data_page_has_null(&self) -> bool;
@@ -27,6 +28,16 @@ pub trait DataPage<T> {
     fn get_data_page_offset(&self) -> usize;
 
     fn get_data_page_type_size(&self) -> usize;
+
+    fn is_zero_copied(&self) -> bool;
+
+    fn read(
+        &self,
+        to_read: RowRange,
+        offset: usize,
+        result_row_range_set: &mut RowRangeSet,
+        result_bridge: &mut dyn Bridge<T>,
+    ) -> Result<bool, BoltReaderError>;
 
     fn get_data_page_covered_range(
         &self,
@@ -81,9 +92,7 @@ mod tests {
 
     use crate::metadata::page_header::read_page_header;
     use crate::page_reader::data_page_v1::data_page_base::DataPage;
-    use crate::page_reader::data_page_v1::fixed_length_plain_data_page_v1::{
-        destroy_fixed_length_plain_data_page_v1, FixedLengthPlainDataPageReaderV1,
-    };
+    use crate::page_reader::data_page_v1::fixed_length_plain_data_page_v1::FixedLengthPlainDataPageReaderV1;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
     use crate::utils::file_loader::LoadFile;
@@ -168,8 +177,6 @@ mod tests {
             covered_range.end,
             data_page.get_data_page_num_values() + data_page_offset - offset
         );
-
-        destroy_fixed_length_plain_data_page_v1(data_page);
     }
 
     #[test]
@@ -195,8 +202,6 @@ mod tests {
         assert!(res.is_ok());
         let res = res.unwrap();
         assert!(res.is_none());
-
-        destroy_fixed_length_plain_data_page_v1(data_page);
     }
 
     #[test]
@@ -220,8 +225,6 @@ mod tests {
         );
 
         assert!(res.is_err());
-
-        destroy_fixed_length_plain_data_page_v1(data_page);
     }
 
     #[test]
@@ -267,8 +270,6 @@ mod tests {
         let covered_range = res.unwrap();
         assert_eq!(covered_range.begin, row_range.begin);
         assert_eq!(covered_range.end, row_range.end);
-
-        destroy_fixed_length_plain_data_page_v1(data_page);
     }
 
     #[test]
@@ -294,8 +295,6 @@ mod tests {
         assert!(res.is_ok());
         let res = res.unwrap();
         assert!(res.is_none());
-
-        destroy_fixed_length_plain_data_page_v1(data_page);
     }
 
     #[test]
@@ -319,7 +318,5 @@ mod tests {
         );
 
         assert!(res.is_err());
-
-        destroy_fixed_length_plain_data_page_v1(data_page);
     }
 }

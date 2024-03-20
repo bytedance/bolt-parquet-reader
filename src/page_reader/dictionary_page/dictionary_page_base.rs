@@ -16,9 +16,11 @@
 pub trait DictionaryPage<T> {
     fn validate(&self, index: usize) -> bool;
 
-    fn find(&self, index: usize) -> T;
+    fn find(&self, index: usize) -> &T;
 
     fn get_num_values(&self) -> usize;
 
     fn get_type_size(&self) -> usize;
+
+    fn is_zero_copied(&self) -> bool;
 }
