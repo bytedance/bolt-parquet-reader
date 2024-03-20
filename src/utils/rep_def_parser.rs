@@ -102,11 +102,14 @@ impl RepDefParser {
         max_value: u32,
     ) -> Result<bool, BoltReaderError> {
         let length = buf.read_u32()?;
+        // RleBpDecoder::read_header() does not shift rpos because we are borrowing Rust Arrow2's RLE/BP decoder
         let (_, header_length, is_bit_packing) = RleBpDecoder::read_header(buf)?;
         let bit_width = RleBpDecoder::get_minimum_required_bits(max_value);
 
         let res = if !is_bit_packing && bit_width + header_length as u32 == length && bit_width == 1
         {
+            // The RLE/BP decoder was borrowed from Rust Arrow2 temporarily.
+            // We need to move the rpos now after reading header.
             buf.set_rpos(buf.get_rpos() + header_length);
             buf.read_u8()? != 1
         } else {
@@ -114,7 +117,10 @@ impl RepDefParser {
             return Ok(true);
         };
 
-        buf.set_rpos(buf.get_rpos() - bit_width as usize - header_length - 4);
+        if res {
+            // If may_have_null, we reset the buffer rpos back for future parse
+            buf.set_rpos(buf.get_rpos() - bit_width as usize - header_length - 4);
+        }
         Ok(res)
     }
 
@@ -142,6 +148,7 @@ mod tests {
 
     use crate::metadata::page_header::read_page_header;
     use crate::metadata::parquet_metadata_thrift::Encoding;
+    use crate::utils::byte_buffer_base::ByteBufferBase;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::file_loader::LoadFile;
     use crate::utils::file_streaming_byte_buffer::{FileStreamingBuffer, StreamingByteBuffer};
@@ -153,6 +160,7 @@ mod tests {
         let vec = vec![0, 0, 0, 2, 8, 1];
         let mut buf = DirectByteBuffer::from_vec(vec);
         let result = RepDefParser::parse_rep_def(&mut buf, 4, 0, true, 1, true);
+        assert_eq!(buf.get_rpos(), buf.len());
         assert!(result.is_ok());
         assert_eq!(result.unwrap().0, false);
     }
@@ -162,6 +170,7 @@ mod tests {
         let vec = vec![0, 0, 0, 4, 8, 1, 12, 1];
         let mut buf = DirectByteBuffer::from_vec(vec);
         let result = RepDefParser::parse_rep_def(&mut buf, 10, 0, true, 1, true);
+        assert_eq!(buf.get_rpos(), buf.len());
         assert!(result.is_ok());
         assert_eq!(result.unwrap().0, false);
     }
@@ -172,6 +181,7 @@ mod tests {
         let vec = vec![0, 0, 0, 4, 8, 0, 4, 1];
         let mut buf = DirectByteBuffer::from_vec(vec);
         let result = RepDefParser::parse_rep_def(&mut buf, 6, 0, true, 1, true);
+        assert_eq!(buf.get_rpos(), buf.len());
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(result.0, true);
@@ -193,12 +203,17 @@ mod tests {
         assert!(page_header.is_ok());
         let page_header = page_header.unwrap();
 
+        let rpos = buf.get_rpos();
+
         let data_page_header = page_header.data_page_header.unwrap();
         let rep_rle_bp = data_page_header.repetition_level_encoding == Encoding::RLE
             || data_page_header.repetition_level_encoding == Encoding::BIT_PACKED;
 
         let def_rle_bp = data_page_header.definition_level_encoding == Encoding::RLE
             || data_page_header.definition_level_encoding == Encoding::BIT_PACKED;
+
+        let rep_def_length = page_header.compressed_page_size - data_page_header.num_values * 8;
+
         let result = RepDefParser::parse_rep_def(
             &mut buf,
             data_page_header.num_values as usize,
@@ -208,6 +223,7 @@ mod tests {
             def_rle_bp,
         );
 
+        assert_eq!(buf.get_rpos(), rpos + rep_def_length as usize);
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(result.0, false);
@@ -228,12 +244,16 @@ mod tests {
         assert!(page_header.is_ok());
         let page_header = page_header.unwrap();
 
+        let rpos = buf.get_rpos();
         let data_page_header = page_header.data_page_header.unwrap();
         let rep_rle_bp = data_page_header.repetition_level_encoding == Encoding::RLE
             || data_page_header.repetition_level_encoding == Encoding::BIT_PACKED;
 
         let def_rle_bp = data_page_header.definition_level_encoding == Encoding::RLE
             || data_page_header.definition_level_encoding == Encoding::BIT_PACKED;
+
+        let rep_def_length = page_header.compressed_page_size - data_page_header.num_values * 8;
+
         let result = RepDefParser::parse_rep_def(
             &mut buf,
             data_page_header.num_values as usize,
@@ -243,6 +263,7 @@ mod tests {
             def_rle_bp,
         );
 
+        assert_eq!(buf.get_rpos(), rpos + rep_def_length as usize);
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(result.0, false);
@@ -265,6 +286,8 @@ mod tests {
         assert!(page_header.is_ok());
         let page_header = page_header.unwrap();
 
+        let rpos = buf.get_rpos();
+
         let data_page_header = page_header.data_page_header.unwrap();
         let rep_rle_bp = data_page_header.repetition_level_encoding == Encoding::RLE
             || data_page_header.repetition_level_encoding == Encoding::BIT_PACKED;
@@ -279,14 +302,17 @@ mod tests {
             1,
             def_rle_bp,
         );
+
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(result.0, true);
         assert!(result.1.is_some());
         let validity = result.1.unwrap();
+        let mut num_non_null_values = 0;
 
         for i in 0..100 {
             assert_eq!(validity[i], true);
+            num_non_null_values += 1;
         }
 
         for i in 100..200 {
@@ -298,8 +324,11 @@ mod tests {
                 assert_eq!(validity[i], false);
             } else {
                 assert_eq!(validity[i], true);
+                num_non_null_values += 1;
             }
         }
+        let rep_def_length = page_header.compressed_page_size - num_non_null_values * 8;
+        assert_eq!(buf.get_rpos(), rpos + rep_def_length as usize);
     }
 
     #[test]
@@ -316,6 +345,8 @@ mod tests {
         assert!(page_header.is_ok());
         let page_header = page_header.unwrap();
 
+        let rpos = buf.get_rpos();
+
         let data_page_header = page_header.data_page_header.unwrap();
         let rep_rle_bp = data_page_header.repetition_level_encoding == Encoding::RLE
             || data_page_header.repetition_level_encoding == Encoding::BIT_PACKED;
@@ -330,14 +361,17 @@ mod tests {
             1,
             def_rle_bp,
         );
+
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(result.0, true);
         assert!(result.1.is_some());
         let validity = result.1.unwrap();
+        let mut num_non_null_values = 0;
 
         for i in 0..100 {
             assert_eq!(validity[i], true);
+            num_non_null_values += 1;
         }
 
         for i in 100..200 {
@@ -349,7 +383,10 @@ mod tests {
                 assert_eq!(validity[i], false);
             } else {
                 assert_eq!(validity[i], true);
+                num_non_null_values += 1;
             }
         }
+        let rep_def_length = page_header.compressed_page_size - num_non_null_values * 8;
+        assert_eq!(buf.get_rpos(), rpos + rep_def_length as usize);
     }
 }
