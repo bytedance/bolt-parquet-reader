@@ -38,39 +38,48 @@ pub trait DataPage<T> {
         result_bridge: &mut dyn Bridge<T>,
     ) -> Result<bool, BoltReaderError>;
 
-    fn get_data_page_covered_range(
+    fn read_with_filter(
         &self,
-        page_begin: usize,
-        page_end: usize,
-        row_range_offset: usize,
-        row_range: &RowRange,
-    ) -> Result<Option<RowRange>, BoltReaderError> {
-        if unlikely(row_range.begin + row_range_offset < page_begin) {
-            return Err(BoltReaderError::FixedLengthDataPageError(format!("Range processing error. Input range begin: {} cannot be smaller than the data page begin: {} with offset", row_range.begin + row_range_offset, page_begin)));
-        }
-
-        row_range.get_covered_range(row_range_offset, page_begin, page_end)
-    }
-
-    fn get_data_page_remaining_range(
-        &self,
-        page_begin: usize,
-        page_end: usize,
-        row_range_offset: usize,
-        row_range: &RowRange,
-    ) -> Result<Option<RowRange>, BoltReaderError> {
-        if unlikely(row_range.begin + row_range_offset < page_begin) {
-            return Err(BoltReaderError::FixedLengthDataPageError(format!("Range processing error. Input range begin: {} cannot be smaller than the data page begin: {} with offset", row_range.begin + row_range_offset, page_begin)));
-        }
-        row_range.get_right_remaining_range(row_range_offset, page_begin, page_end)
-    }
+        to_read: RowRange,
+        offset: usize,
+        result_row_range_set: &mut RowRangeSet,
+        result_bridge: &mut dyn Bridge<T>,
+    ) -> Result<(), BoltReaderError>;
 }
+
+pub fn get_data_page_covered_range(
+    page_begin: usize,
+    page_end: usize,
+    row_range_offset: usize,
+    row_range: &RowRange,
+) -> Result<Option<RowRange>, BoltReaderError> {
+    if unlikely(row_range.begin + row_range_offset < page_begin) {
+        return Err(BoltReaderError::FixedLengthDataPageError(format!("Range processing error. Input range begin: {} cannot be smaller than the data page begin: {} with offset", row_range.begin + row_range_offset, page_begin)));
+    }
+
+    row_range.get_covered_range(row_range_offset, page_begin, page_end)
+}
+
+pub fn get_data_page_remaining_range(
+    page_begin: usize,
+    page_end: usize,
+    row_range_offset: usize,
+    row_range: &RowRange,
+) -> Result<Option<RowRange>, BoltReaderError> {
+    if unlikely(row_range.begin + row_range_offset < page_begin) {
+        return Err(BoltReaderError::FixedLengthDataPageError(format!("Range processing error. Input range begin: {} cannot be smaller than the data page begin: {} with offset", row_range.begin + row_range_offset, page_begin)));
+    }
+    row_range.get_right_remaining_range(row_range_offset, page_begin, page_end)
+}
+
 #[cfg(test)]
 mod tests {
     use std::mem;
 
     use crate::metadata::page_header::read_page_header;
-    use crate::page_reader::data_page_v1::data_page_base::DataPage;
+    use crate::page_reader::data_page_v1::data_page_base::{
+        get_data_page_covered_range, get_data_page_remaining_range, DataPage,
+    };
     use crate::page_reader::data_page_v1::fixed_length_plain_data_page_v1::FixedLengthPlainDataPageReaderV1;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
@@ -126,7 +135,7 @@ mod tests {
 
         let row_range = RowRange::new(1, 5);
         let offset = 1000;
-        let res = data_page.get_data_page_covered_range(
+        let res = get_data_page_covered_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_num_values() + data_page.get_data_page_offset(),
             offset,
@@ -141,7 +150,7 @@ mod tests {
 
         let row_range = RowRange::new(1, 100000000);
         let offset = 1000;
-        let res = data_page.get_data_page_covered_range(
+        let res = get_data_page_covered_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_num_values() + data_page.get_data_page_offset(),
             offset,
@@ -171,7 +180,7 @@ mod tests {
 
         let row_range = RowRange::new(1, 5);
         let offset = 10000000;
-        let res = data_page.get_data_page_covered_range(
+        let res = get_data_page_covered_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_num_values() + data_page.get_data_page_offset(),
             offset,
@@ -196,7 +205,7 @@ mod tests {
 
         let row_range = RowRange::new(1, 5);
         let offset = 10;
-        let res = data_page.get_data_page_covered_range(
+        let res = get_data_page_covered_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_num_values() + data_page.get_data_page_offset(),
             offset,
@@ -219,7 +228,7 @@ mod tests {
 
         let row_range = RowRange::new(1, 100000000);
         let offset = 1000;
-        let res = data_page.get_data_page_remaining_range(
+        let res = get_data_page_remaining_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_num_values() + data_page.get_data_page_offset(),
             offset,
@@ -237,7 +246,7 @@ mod tests {
 
         let row_range = RowRange::new(10000000, 100000000);
         let offset = 1000;
-        let res = data_page.get_data_page_remaining_range(
+        let res = get_data_page_remaining_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_num_values() + data_page.get_data_page_offset(),
             offset,
@@ -264,7 +273,7 @@ mod tests {
 
         let row_range = RowRange::new(1, 5);
         let offset = 1000;
-        let res = data_page.get_data_page_remaining_range(
+        let res = get_data_page_remaining_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_num_values() + data_page.get_data_page_offset(),
             offset,
@@ -289,7 +298,7 @@ mod tests {
 
         let row_range = RowRange::new(1, 5);
         let offset = 10;
-        let res = data_page.get_data_page_covered_range(
+        let res = get_data_page_covered_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_num_values() + data_page.get_data_page_offset(),
             offset,

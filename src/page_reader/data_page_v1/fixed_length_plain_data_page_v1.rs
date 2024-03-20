@@ -35,7 +35,10 @@ const DEFAULT_DISPLAY_NUMBER: usize = 10;
 /// The Parquet Page Reader V1 Struct
 /// current_offset: the offset in the whole column
 
-pub struct FixedLengthPlainDataPageReaderV1<'a, T> {
+pub struct FixedLengthPlainDataPageReaderV1<'a, T>
+where
+    T: 'static + std::marker::Copy,
+{
     has_null: bool,
     num_values: usize,
     current_offset: usize,
@@ -47,7 +50,7 @@ pub struct FixedLengthPlainDataPageReaderV1<'a, T> {
     data: Vec<T>,
 }
 
-impl<'a, T> Drop for FixedLengthPlainDataPageReaderV1<'a, T> {
+impl<'a, T: 'static + std::marker::Copy> Drop for FixedLengthPlainDataPageReaderV1<'a, T> {
     fn drop(&mut self) {
         let data = mem::take(&mut self.data);
         if self.is_zero_copied() {
@@ -57,7 +60,9 @@ impl<'a, T> Drop for FixedLengthPlainDataPageReaderV1<'a, T> {
 }
 
 #[allow(dead_code)]
-impl<'a, T: ToString> std::fmt::Display for FixedLengthPlainDataPageReaderV1<'a, T> {
+impl<'a, T: ToString + std::marker::Copy> std::fmt::Display
+    for FixedLengthPlainDataPageReaderV1<'a, T>
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let data_str = self
             .data
@@ -85,7 +90,7 @@ impl<'a, T: ToString> std::fmt::Display for FixedLengthPlainDataPageReaderV1<'a,
     }
 }
 
-impl<'a, T> DataPage<T> for FixedLengthPlainDataPageReaderV1<'a, T> {
+impl<'a, T: 'static + std::marker::Copy> DataPage<T> for FixedLengthPlainDataPageReaderV1<'a, T> {
     fn data_page_has_null(&self) -> bool {
         self.has_null
     }
@@ -129,68 +134,8 @@ impl<'a, T> DataPage<T> for FixedLengthPlainDataPageReaderV1<'a, T> {
         };
         Ok(finished)
     }
-}
 
-impl<'a, T: 'static + std::marker::Copy> FixedLengthPlainDataPageReaderV1<'a, T> {
-    pub fn new(
-        page_header: &PageHeader,
-        buffer: &mut dyn ByteBufferBase,
-        current_offset: usize,
-        type_size: usize,
-        has_null: bool,
-        filter: Option<&'a (dyn FixedLengthRangeFilter + 'a)>,
-        validity: Option<Vec<bool>>,
-    ) -> Result<FixedLengthPlainDataPageReaderV1<'a, T>, BoltReaderError> {
-        let header = match &page_header.data_page_header {
-            Some(data_page_v1) => data_page_v1,
-            None => {
-                return Err(BoltReaderError::FixedLengthDataPageError(String::from(
-                    "Error when reading Data Page V1 Header",
-                )))
-            }
-        };
-
-        let num_values = header.num_values as usize;
-        let encoding = header.encoding;
-
-        if encoding != parquet_metadata_thrift::Encoding::PLAIN {
-            return Err(BoltReaderError::FixedLengthDataPageError(String::from(
-                "Plain Data Page Encoding should be PLAIN",
-            )));
-        }
-        let data_size: usize = num_values * type_size;
-
-        let zero_copy;
-        let data: Vec<T> = if buffer.can_create_buffer_slice(buffer.get_rpos(), data_size) {
-            zero_copy = true;
-            let res = DirectByteBuffer::convert_byte_vec(
-                buffer.load_bytes_to_byte_vec(buffer.get_rpos(), data_size)?,
-                type_size,
-            )?;
-            buffer.set_rpos(buffer.get_rpos() + data_size);
-
-            res
-        } else {
-            zero_copy = false;
-            DirectByteBuffer::convert_byte_vec(
-                buffer.load_bytes_to_byte_vec_deep_copy(buffer.get_rpos(), data_size)?,
-                type_size,
-            )?
-        };
-
-        Ok(FixedLengthPlainDataPageReaderV1 {
-            has_null,
-            num_values,
-            current_offset,
-            type_size,
-            zero_copy,
-            filter,
-            validity,
-            data,
-        })
-    }
-
-    pub fn read_with_filter(
+    fn read_with_filter(
         &self,
         to_read: RowRange,
         offset: usize,
@@ -269,6 +214,66 @@ impl<'a, T: 'static + std::marker::Copy> FixedLengthPlainDataPageReaderV1<'a, T>
     }
 }
 
+impl<'a, T: 'static + std::marker::Copy> FixedLengthPlainDataPageReaderV1<'a, T> {
+    pub fn new(
+        page_header: &PageHeader,
+        buffer: &mut dyn ByteBufferBase,
+        current_offset: usize,
+        type_size: usize,
+        has_null: bool,
+        filter: Option<&'a (dyn FixedLengthRangeFilter + 'a)>,
+        validity: Option<Vec<bool>>,
+    ) -> Result<FixedLengthPlainDataPageReaderV1<'a, T>, BoltReaderError> {
+        let header = match &page_header.data_page_header {
+            Some(data_page_v1) => data_page_v1,
+            None => {
+                return Err(BoltReaderError::FixedLengthDataPageError(String::from(
+                    "Error when reading Data Page V1 Header",
+                )))
+            }
+        };
+
+        let num_values = header.num_values as usize;
+        let encoding = header.encoding;
+
+        if encoding != parquet_metadata_thrift::Encoding::PLAIN {
+            return Err(BoltReaderError::FixedLengthDataPageError(String::from(
+                "Plain Data Page Encoding should be PLAIN",
+            )));
+        }
+        let data_size: usize = num_values * type_size;
+
+        let zero_copy;
+        let data: Vec<T> = if buffer.can_create_buffer_slice(buffer.get_rpos(), data_size) {
+            zero_copy = true;
+            let res = DirectByteBuffer::convert_byte_vec(
+                buffer.load_bytes_to_byte_vec(buffer.get_rpos(), data_size)?,
+                type_size,
+            )?;
+            buffer.set_rpos(buffer.get_rpos() + data_size);
+
+            res
+        } else {
+            zero_copy = false;
+            DirectByteBuffer::convert_byte_vec(
+                buffer.load_bytes_to_byte_vec_deep_copy(buffer.get_rpos(), data_size)?,
+                type_size,
+            )?
+        };
+
+        Ok(FixedLengthPlainDataPageReaderV1 {
+            has_null,
+            num_values,
+            current_offset,
+            type_size,
+            zero_copy,
+            filter,
+            validity,
+            data,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -279,7 +284,7 @@ mod tests {
     use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
     use crate::filters::integer_range_filter::IntegerRangeFilter;
     use crate::metadata::page_header::read_page_header;
-    use crate::page_reader::data_page_v1::data_page_base::DataPage;
+    use crate::page_reader::data_page_v1::data_page_base::{get_data_page_covered_range, DataPage};
     use crate::page_reader::data_page_v1::fixed_length_plain_data_page_v1::FixedLengthPlainDataPageReaderV1;
     use crate::utils::byte_buffer_base::ByteBufferBase;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
@@ -470,7 +475,7 @@ mod tests {
         let offset = 50;
         let capacity = 1024;
 
-        let to_read = data_page.get_data_page_covered_range(
+        let to_read = get_data_page_covered_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_offset() + data_page.get_data_page_num_values(),
             offset,
@@ -561,7 +566,7 @@ mod tests {
         let offset = 50;
         let capacity = 1024;
 
-        let to_read = data_page.get_data_page_covered_range(
+        let to_read = get_data_page_covered_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_offset() + data_page.get_data_page_num_values(),
             offset,
@@ -653,7 +658,7 @@ mod tests {
             let offset = 50;
             let capacity = 1024;
 
-            let to_read = data_page.get_data_page_covered_range(
+            let to_read = get_data_page_covered_range(
                 data_page.get_data_page_offset(),
                 data_page.get_data_page_offset() + data_page.get_data_page_num_values(),
                 offset,
@@ -749,7 +754,7 @@ mod tests {
         let offset = 50;
         let capacity = 1024;
 
-        let to_read = data_page.get_data_page_covered_range(
+        let to_read = get_data_page_covered_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_offset() + data_page.get_data_page_num_values(),
             offset,
@@ -838,7 +843,7 @@ mod tests {
         let offset = 100;
         let capacity = 1024;
 
-        let to_read = data_page.get_data_page_covered_range(
+        let to_read = get_data_page_covered_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_offset() + data_page.get_data_page_num_values(),
             offset,
@@ -973,7 +978,7 @@ mod tests {
         let offset = 100;
         let capacity = 1024;
 
-        let to_read = data_page.get_data_page_covered_range(
+        let to_read = get_data_page_covered_range(
             data_page.get_data_page_offset(),
             data_page.get_data_page_offset() + data_page.get_data_page_num_values(),
             offset,
