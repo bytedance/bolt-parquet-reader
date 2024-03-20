@@ -24,6 +24,11 @@ pub trait FixedLengthRangeFilter: FilterBasic + std::fmt::Display {
     }
 
     #[inline(always)]
+    fn check_null(&self, _: bool) -> bool {
+        false
+    }
+
+    #[inline(always)]
     fn check_i32(&self, _: i32) -> bool {
         false
     }
@@ -45,6 +50,31 @@ pub trait FixedLengthRangeFilter: FilterBasic + std::fmt::Display {
 
     #[inline(always)]
     fn check_f32(&self, _: f32) -> bool {
+        false
+    }
+
+    #[inline(always)]
+    fn check_i32_with_validity(&self, _: i32, _: bool) -> bool {
+        false
+    }
+
+    #[inline(always)]
+    fn check_i64_with_validity(&self, _: i64, _: bool) -> bool {
+        false
+    }
+
+    #[inline(always)]
+    fn check_i128_with_validity(&self, _: i128, _: bool) -> bool {
+        false
+    }
+
+    #[inline(always)]
+    fn check_f64_with_validity(&self, _: f64, _: bool) -> bool {
+        false
+    }
+
+    #[inline(always)]
+    fn check_f32_with_validity(&self, _: f32, _: bool) -> bool {
         false
     }
 
