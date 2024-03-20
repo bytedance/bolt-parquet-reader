@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::{max, min};
 use std::fmt::Formatter;
+use std::intrinsics::unlikely;
+
+use crate::utils::exceptions::BoltReaderError;
 
 pub struct RowRange {
     pub begin: usize,
@@ -30,6 +34,127 @@ impl std::fmt::Display for RowRange {
 impl RowRange {
     pub fn new(begin: usize, end: usize) -> RowRange {
         RowRange { begin, end }
+    }
+
+    /// Get the truncated RowRange based on the input absolute begin and end indexes.
+    ///
+    /// # Arguments
+    ///
+    /// * `row_range_offset` - The offset for the self RowRange
+    /// * `to_read_begin` - The absolute begin
+    /// * `to_read_end` - The absolute end
+    ///
+    ///  For example
+    ///  self: [1,10)
+    ///  row_range_offset: 5
+    ///  to_read_begin: 7
+    ///  to_read_end: 10
+    ///  Result: [2,5)
+    pub fn get_covered_range(
+        &self,
+        row_range_offset: usize,
+        to_read_begin: usize,
+        to_read_end: usize,
+    ) -> Result<Option<RowRange>, BoltReaderError> {
+        let begin = self.begin + row_range_offset;
+        let end = self.end + row_range_offset;
+
+        if unlikely(to_read_begin >= to_read_end) {
+            return Err(BoltReaderError::InternalError(format!(
+                "Range processing error. Input begin {}, end {}",
+                to_read_begin, to_read_end
+            )));
+        }
+
+        if end <= to_read_begin || begin >= to_read_end {
+            return Ok(None);
+        }
+
+        Ok(Some(RowRange::new(
+            max(begin, to_read_begin) - row_range_offset,
+            min(end, to_read_end) - row_range_offset,
+        )))
+    }
+
+    /// Get the left remaining RowRange based on the input absolute begin and end indexes.
+    ///
+    /// # Arguments
+    ///
+    /// * `row_range_offset` - The offset for the self RowRange
+    /// * `to_read_begin` - The absolute begin
+    /// * `to_read_end` - The absolute end
+    ///
+    ///  For example
+    ///  self: [1,10)
+    ///  row_range_offset: 5
+    ///  to_read_begin: 7
+    ///  to_read_end: 10
+    ///  Result: [1,2)
+    #[allow(dead_code)]
+    pub fn get_left_remaining_range(
+        &self,
+        row_range_offset: usize,
+        to_read_begin: usize,
+        to_read_end: usize,
+    ) -> Result<Option<RowRange>, BoltReaderError> {
+        let begin = self.begin + row_range_offset;
+        let end = self.end + row_range_offset;
+
+        if unlikely(to_read_begin >= to_read_end) {
+            return Err(BoltReaderError::InternalError(format!(
+                "Range processing error. Input begin {}, end {}",
+                to_read_begin, to_read_end
+            )));
+        }
+
+        if to_read_begin <= begin {
+            return Ok(None);
+        }
+
+        Ok(Some(RowRange::new(
+            begin - row_range_offset,
+            min(end, to_read_begin) - row_range_offset,
+        )))
+    }
+
+    /// Get the right remaining RowRange based on the input absolute begin and end indexes.
+    ///
+    /// # Arguments
+    ///
+    /// * `row_range_offset` - The offset for the self RowRange
+    /// * `to_read_begin` - The absolute begin
+    /// * `to_read_end` - The absolute end
+    ///
+    ///  For example
+    ///  self: [1,10)
+    ///  row_range_offset: 5
+    ///  to_read_begin: 7
+    ///  to_read_end: 10
+    ///  Result: [5,10)
+    pub fn get_right_remaining_range(
+        &self,
+        row_range_offset: usize,
+        to_read_begin: usize,
+        to_read_end: usize,
+    ) -> Result<Option<RowRange>, BoltReaderError> {
+        let begin = self.begin + row_range_offset;
+        let end = self.end + row_range_offset;
+
+        if unlikely(to_read_begin >= to_read_end) {
+            return Err(BoltReaderError::InternalError(format!(
+                "Range processing error. Input begin {}, end {}",
+                to_read_begin, to_read_end
+            )));
+        }
+
+        if to_read_end >= end {
+            return Ok(None);
+        }
+
+        Ok(Some(RowRange::new(
+            max(begin, to_read_end) - row_range_offset,
+            end - row_range_offset,
+        )))
     }
 }
 
@@ -115,7 +240,7 @@ impl<'a> RowRangeSetGenerator<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::row_range_set::{RowRangeSet, RowRangeSetGenerator};
+    use crate::utils::row_range_set::{RowRange, RowRangeSet, RowRangeSetGenerator};
 
     #[test]
     fn test_create_row_range_set() {
@@ -209,5 +334,121 @@ mod tests {
         assert_eq!(row_range_set.get_row_ranges().len(), 1);
         assert_eq!(row_range_set.get_row_ranges()[0].begin, 4);
         assert_eq!(row_range_set.get_row_ranges()[0].end, 7);
+    }
+
+    #[test]
+    fn test_get_covered_row_range() {
+        // row_range is [6,15)
+        let row_range = RowRange::new(1, 10);
+        let row_range_offset = 5;
+
+        let res = row_range.get_covered_range(row_range_offset, 2, 5);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_none());
+
+        let res = row_range.get_covered_range(row_range_offset, 16, 19);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_none());
+
+        let res = row_range.get_covered_range(row_range_offset, 7, 10);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_some());
+        let res_row_range = res.unwrap();
+        assert_eq!(res_row_range.begin, 2);
+        assert_eq!(res_row_range.end, 5);
+
+        let res = row_range.get_covered_range(row_range_offset, 3, 7);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_some());
+        let res_row_range = res.unwrap();
+        assert_eq!(res_row_range.begin, 1);
+        assert_eq!(res_row_range.end, 2);
+
+        let res = row_range.get_covered_range(row_range_offset, 13, 17);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_some());
+        let res_row_range = res.unwrap();
+        assert_eq!(res_row_range.begin, 8);
+        assert_eq!(res_row_range.end, 10);
+
+        let res = row_range.get_covered_range(row_range_offset, 5, 2);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_get_left_remaining_row_range() {
+        // row_range is [6,15)
+        let row_range = RowRange::new(1, 10);
+        let row_range_offset = 5;
+
+        let res = row_range.get_left_remaining_range(row_range_offset, 2, 5);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_none());
+
+        let res = row_range.get_left_remaining_range(row_range_offset, 3, 8);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_none());
+
+        let res = row_range.get_left_remaining_range(row_range_offset, 7, 10);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_some());
+        let res_row_range = res.unwrap();
+        assert_eq!(res_row_range.begin, 1);
+        assert_eq!(res_row_range.end, 2);
+
+        let res = row_range.get_left_remaining_range(row_range_offset, 13, 17);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_some());
+        let res_row_range = res.unwrap();
+        assert_eq!(res_row_range.begin, 1);
+        assert_eq!(res_row_range.end, 8);
+
+        let res = row_range.get_left_remaining_range(row_range_offset, 5, 2);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_get_right_remaining_row_range() {
+        // row_range is [6,15)
+        let row_range = RowRange::new(1, 10);
+        let row_range_offset = 5;
+
+        let res = row_range.get_right_remaining_range(row_range_offset, 13, 18);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_none());
+
+        let res = row_range.get_right_remaining_range(row_range_offset, 16, 19);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_none());
+
+        let res = row_range.get_right_remaining_range(row_range_offset, 7, 10);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_some());
+        let res_row_range = res.unwrap();
+        assert_eq!(res_row_range.begin, 5);
+        assert_eq!(res_row_range.end, 10);
+
+        let res = row_range.get_right_remaining_range(row_range_offset, 3, 7);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert!(res.is_some());
+        let res_row_range = res.unwrap();
+        assert_eq!(res_row_range.begin, 2);
+        assert_eq!(res_row_range.end, 10);
+
+        let res = row_range.get_right_remaining_range(row_range_offset, 5, 2);
+        assert!(res.is_err());
     }
 }
