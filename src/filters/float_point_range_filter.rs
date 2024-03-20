@@ -15,7 +15,8 @@
 
 use std::fmt::Formatter;
 use std::ops::{BitAnd, BitOr};
-use std::simd::{Mask, Simd, SimdPartialEq, SimdPartialOrd};
+use std::simd::cmp::{SimdPartialEq, SimdPartialOrd};
+use std::simd::{Mask, Simd};
 
 use crate::filters::filter::*;
 use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
