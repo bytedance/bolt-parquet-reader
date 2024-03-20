@@ -44,7 +44,7 @@ pub trait DataPage<T> {
         offset: usize,
         result_row_range_set: &mut RowRangeSet,
         result_bridge: &mut dyn Bridge<T>,
-    ) -> Result<(), BoltReaderError>;
+    ) -> Result<bool, BoltReaderError>;
 }
 
 pub fn get_data_page_covered_range(

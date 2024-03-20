@@ -19,7 +19,7 @@ use crate::convert_generic_vec;
 use crate::utils::direct_byte_buffer::{ByteBufferSlice, DirectByteBuffer};
 use crate::utils::exceptions::BoltReaderError;
 
-pub trait ByteBufferBase {
+pub trait ByteBufferBase: std::io::Read {
     fn can_create_buffer_slice(&self, start: usize, len: usize) -> bool;
 
     fn create_buffer_slice(

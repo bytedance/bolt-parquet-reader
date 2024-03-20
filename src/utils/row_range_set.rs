@@ -36,6 +36,11 @@ impl RowRange {
         RowRange { begin, end }
     }
 
+    #[inline(always)]
+    pub fn get_length(&self) -> usize {
+        self.end - self.begin
+    }
+
     /// Get the truncated RowRange based on the input absolute begin and end indexes.
     ///
     /// # Arguments
