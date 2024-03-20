@@ -19,9 +19,9 @@ jobs:
     - name: Format Check
       run: cargo fmt --all -- --check
     - name: Build
-      run: cargo build --verbose
+      run: cargo +nightly build --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo +nightly test --verbose
     - name: Run Clippy
-      run: cargo clippy --verbose
+      run: cargo +nightly clippy --verbose
       
