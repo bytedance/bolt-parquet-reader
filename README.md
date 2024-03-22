@@ -34,13 +34,18 @@ This project is under actively development. You are more than welcomed to make c
 git clone https://github.com/bytedance/bolt-parquet-reader.git
 ```
 
-### 2. Compile and Execute
+### 2. Prepare Rust Environment
 ```
-cargo fmt --all
-cargo fmt --all -- --check
-cargo build --package bolt-parquet-reader --lib
-cargo test --verbose
-cargo clippy --verbose
+# We recommend to use this version to enable zero copy features.
+rustup install nightly-2022-11-03
+```
+
+### 3. Compile and Execute
+```
+cargo +nightly-2022-11-03 fmt --all -- --check
+cargo +nightly-2022-11-03 build --package bolt-parquet-reader --lib
+cargo +nightly-2022-11-03 test --verbose
+cargo +nightly-2022-11-03 clippy --verbose
 ```
 
 # License
