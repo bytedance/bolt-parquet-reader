@@ -37,15 +37,15 @@ git clone https://github.com/bytedance/bolt-parquet-reader.git
 ### 2. Prepare Rust Environment
 ```
 # We recommend to use this version to enable zero copy features.
-rustup install nightly-2022-11-03
+rustup install nightly-2023-11-13
 ```
 
 ### 3. Compile and Execute
 ```
-cargo +nightly-2022-11-03 fmt --all -- --check
-cargo +nightly-2022-11-03 build --package bolt-parquet-reader --lib
-cargo +nightly-2022-11-03 test --verbose
-cargo +nightly-2022-11-03 clippy --verbose
+cargo +nightly-2023-11-13 fmt --all -- --check
+cargo +nightly-2023-11-13 build --package bolt-parquet-reader --lib
+cargo +nightly-2023-11-13 test --verbose
+cargo +nightly-2023-11-13 clippy --verbose
 ```
 
 # License
