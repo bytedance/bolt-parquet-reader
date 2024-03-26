@@ -16,3 +16,4 @@
 pub mod page_header;
 pub mod parquet_footer;
 pub mod parquet_metadata_thrift;
+pub mod utils;
