@@ -17,6 +17,7 @@ use std::fmt::{Debug, Formatter};
 
 pub enum FilterType {
     ConstFilter,
+    Boolean,
     IntegerRange,
     FloatPointRange,
 }
@@ -26,6 +27,9 @@ impl Debug for FilterType {
         match self {
             FilterType::ConstFilter => {
                 writeln!(f, "ConstFilter")
+            }
+            FilterType::Boolean => {
+                writeln!(f, "Boolean")
             }
             FilterType::IntegerRange => {
                 writeln!(f, "IntegerRange")
@@ -42,6 +46,7 @@ impl PartialEq for FilterType {
         matches!(
             (self, other),
             (self::FilterType::ConstFilter, self::FilterType::ConstFilter)
+                | (self::FilterType::Boolean, self::FilterType::Boolean)
                 | (
                     self::FilterType::IntegerRange,
                     self::FilterType::IntegerRange
