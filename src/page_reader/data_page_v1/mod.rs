@@ -13,5 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod boolean_data_page_v1;
 pub mod data_page_base;
 pub mod fixed_length_plain_data_page_v1;

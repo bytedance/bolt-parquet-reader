@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod boolean_filter;
+pub mod boolean_filter;
 pub mod const_filter;
 pub mod filter;
 pub mod fixed_length_filter;
