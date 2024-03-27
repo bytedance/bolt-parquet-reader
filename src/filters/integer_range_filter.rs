@@ -16,7 +16,8 @@
 use std::cmp::{max, min};
 use std::fmt::Formatter;
 use std::ops::BitAnd;
-use std::simd::{Mask, Simd, SimdPartialOrd};
+use std::simd::cmp::SimdPartialOrd;
+use std::simd::{Mask, Simd};
 
 use crate::filters::filter::*;
 use crate::filters::fixed_length_filter::FixedLengthRangeFilter;

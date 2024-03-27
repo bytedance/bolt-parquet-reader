@@ -15,7 +15,6 @@
 
 use std::fmt::Formatter;
 use std::intrinsics::unlikely;
-use std::string::String;
 
 use crate::bridge::bridge_base::Bridge;
 use crate::utils::exceptions::BoltReaderError;

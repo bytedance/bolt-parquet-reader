@@ -14,6 +14,7 @@
 // limitations under the License.
 
 #![deny(warnings)]
+#![allow(internal_features)]
 #![feature(portable_simd)]
 #![feature(core_intrinsics)]
 pub mod bridge;
