@@ -31,7 +31,7 @@ pub trait DataPage<T> {
     fn is_zero_copied(&self) -> bool;
 
     fn read(
-        &self,
+        &mut self,
         to_read: RowRange,
         offset: usize,
         result_row_range_set: &mut RowRangeSet,
@@ -39,7 +39,7 @@ pub trait DataPage<T> {
     ) -> Result<bool, BoltReaderError>;
 
     fn read_with_filter(
-        &self,
+        &mut self,
         to_read: RowRange,
         offset: usize,
         result_row_range_set: &mut RowRangeSet,
@@ -87,7 +87,7 @@ mod tests {
     use crate::utils::local_file_loader::LocalFileLoader;
     use crate::utils::row_range_set::RowRange;
 
-    fn load_plain_data_page<'a, T: 'static + std::marker::Copy>(
+    fn load_plain_data_page<'a, T: 'static + std::marker::Copy + std::default::Default>(
         data_page_offset: usize,
         path: String,
     ) -> (
@@ -107,6 +107,7 @@ mod tests {
         let page_header = page_header.unwrap();
 
         buf.set_rpos(buf.get_rpos() + 8);
+        let data_size = page_header.uncompressed_page_size - 8;
 
         (
             FixedLengthPlainDataPageReaderV1::new(
@@ -115,6 +116,7 @@ mod tests {
                 data_page_offset,
                 mem::size_of::<T>(),
                 false,
+                data_size as usize,
                 None,
                 Option::None,
             ),
