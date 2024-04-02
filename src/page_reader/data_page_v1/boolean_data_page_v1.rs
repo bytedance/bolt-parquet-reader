@@ -33,10 +33,13 @@ pub struct BooleanDataPageReaderV1<'a> {
     type_size: usize,
     #[allow(dead_code)]
     zero_copy: bool,
+    non_null_index: usize,
+    nullable_index: usize,
     filter: Option<&'a dyn FixedLengthRangeFilter>,
     #[allow(dead_code)]
     validity: Option<Vec<bool>>,
     data: Vec<u8>,
+    data_with_nulls: Option<Vec<bool>>,
 }
 
 impl<'a> Drop for BooleanDataPageReaderV1<'a> {
@@ -88,13 +91,30 @@ impl<'a> DataPage<bool> for BooleanDataPageReaderV1<'a> {
         result_row_range_set: &mut RowRangeSet,
         result_bridge: &mut dyn Bridge<bool>,
     ) -> Result<bool, BoltReaderError> {
+        let start = to_read.begin + offset - self.current_offset;
+        let end = to_read.end + offset - self.current_offset;
+
         let finished = if self.has_null {
-            return Err(BoltReaderError::NotYetImplementedError(String::from(
-                "Not Yet Implemented: Read Data Page with nulls",
-            )));
+            let validity = self.validity.as_ref().unwrap();
+            let data_with_nulls = self.data_with_nulls.as_mut().unwrap();
+
+            for i in self.nullable_index..end {
+                if validity[i] {
+                    data_with_nulls[i] = (self.data[self.non_null_index / 8]
+                        & 0x1 << (self.non_null_index % 8))
+                        != 0;
+                    self.non_null_index += 1;
+                }
+            }
+
+            self.nullable_index = end;
+            result_row_range_set.add_row_ranges(
+                to_read.begin + offset - result_row_range_set.get_offset(),
+                to_read.end + offset - result_row_range_set.get_offset(),
+            );
+            result_bridge.append_results(&validity[start..end], &data_with_nulls[start..end])?;
+            end == self.num_values
         } else {
-            let start = to_read.begin + offset - self.current_offset;
-            let end = to_read.end + offset - self.current_offset;
             result_row_range_set.add_row_ranges(
                 to_read.begin + offset - result_row_range_set.get_offset(),
                 to_read.end + offset - result_row_range_set.get_offset(),
@@ -137,132 +157,11 @@ impl<'a> DataPage<bool> for BooleanDataPageReaderV1<'a> {
         result_row_range_set: &mut RowRangeSet,
         result_bridge: &mut dyn Bridge<bool>,
     ) -> Result<bool, BoltReaderError> {
-        let finished = if self.has_null {
-            return Err(BoltReaderError::NotYetImplementedError(String::from(
-                "Not Yet Implemented: Read Data Page with nulls",
-            )));
+        if self.has_null {
+            self.read_nullable_with_filter(to_read, offset, result_row_range_set, result_bridge)
         } else {
-            let filter = self.filter.unwrap();
-            let start = to_read.begin + offset - self.current_offset;
-            let end = to_read.end + offset - self.current_offset;
-
-            let start_byte = start / 8;
-            let start_bit = start % 8;
-            let end_byte = end / 8;
-            let end_bit = end % 8;
-
-            let mut generator = RowRangeSetGenerator::new(result_row_range_set);
-            let mut index = start;
-            for i in start_bit..8 {
-                index = self.read_bit_with_filter(
-                    self.data[start_byte],
-                    index,
-                    i,
-                    filter,
-                    index + self.current_offset - offset,
-                    &mut generator,
-                    result_bridge,
-                );
-            }
-
-            // This is to read 8 bits within a byte
-            for i in start_byte + 1..end_byte {
-                index = self.read_bit_with_filter(
-                    self.data[i],
-                    index,
-                    0,
-                    filter,
-                    index + self.current_offset - offset,
-                    &mut generator,
-                    result_bridge,
-                );
-
-                index = self.read_bit_with_filter(
-                    self.data[i],
-                    index,
-                    1,
-                    filter,
-                    index + self.current_offset - offset,
-                    &mut generator,
-                    result_bridge,
-                );
-
-                index = self.read_bit_with_filter(
-                    self.data[i],
-                    index,
-                    2,
-                    filter,
-                    index + self.current_offset - offset,
-                    &mut generator,
-                    result_bridge,
-                );
-
-                index = self.read_bit_with_filter(
-                    self.data[i],
-                    index,
-                    3,
-                    filter,
-                    index + self.current_offset - offset,
-                    &mut generator,
-                    result_bridge,
-                );
-
-                index = self.read_bit_with_filter(
-                    self.data[i],
-                    index,
-                    4,
-                    filter,
-                    index + self.current_offset - offset,
-                    &mut generator,
-                    result_bridge,
-                );
-
-                index = self.read_bit_with_filter(
-                    self.data[i],
-                    index,
-                    5,
-                    filter,
-                    index + self.current_offset - offset,
-                    &mut generator,
-                    result_bridge,
-                );
-
-                index = self.read_bit_with_filter(
-                    self.data[i],
-                    index,
-                    6,
-                    filter,
-                    index + self.current_offset - offset,
-                    &mut generator,
-                    result_bridge,
-                );
-
-                index = self.read_bit_with_filter(
-                    self.data[i],
-                    index,
-                    7,
-                    filter,
-                    index + self.current_offset - offset,
-                    &mut generator,
-                    result_bridge,
-                );
-            }
-
-            for i in 0..end_bit {
-                index = self.read_bit_with_filter(
-                    self.data[end_byte],
-                    index,
-                    i,
-                    filter,
-                    index + self.current_offset - offset,
-                    &mut generator,
-                    result_bridge,
-                );
-            }
-            generator.finish(end + self.current_offset - offset);
-            end == self.num_values
-        };
-        Ok(finished)
+            self.read_non_null_with_filter(to_read, offset, result_row_range_set, result_bridge)
+        }
     }
 }
 
@@ -313,6 +212,18 @@ impl<'a> BooleanDataPageReaderV1<'a> {
                 type_size,
             )?
         };
+        let data_with_nulls = if has_null {
+            let mut vec: Vec<bool> = Vec::with_capacity(num_values);
+
+            let _remaining = vec.spare_capacity_mut();
+            unsafe {
+                vec.set_len(num_values);
+            }
+
+            Some(vec)
+        } else {
+            None
+        };
 
         Ok(BooleanDataPageReaderV1 {
             has_null,
@@ -320,10 +231,18 @@ impl<'a> BooleanDataPageReaderV1<'a> {
             current_offset,
             type_size,
             zero_copy,
+            non_null_index: 0,
+            nullable_index: 0,
             filter,
             validity,
             data,
+            data_with_nulls,
         })
+    }
+
+    #[inline(always)]
+    pub fn read_bit(&self, byte_index: usize, bit_index: usize) -> bool {
+        (self.data[byte_index] & (1 << bit_index)) != 0
     }
 
     #[inline(always)]
@@ -345,6 +264,169 @@ impl<'a> BooleanDataPageReaderV1<'a> {
             result_bridge.append_non_null_result(value);
         }
         read_index + 1
+    }
+
+    pub fn read_nullable_with_filter(
+        &mut self,
+        to_read: RowRange,
+        offset: usize,
+        result_row_range_set: &mut RowRangeSet,
+        result_bridge: &mut dyn Bridge<bool>,
+    ) -> Result<bool, BoltReaderError> {
+        let filter = self.filter.unwrap();
+        let start = to_read.begin + offset - self.current_offset;
+        let end = to_read.end + offset - self.current_offset;
+
+        let validity = self.validity.as_ref().unwrap();
+        let data_with_nulls = self.data_with_nulls.as_mut().unwrap();
+
+        for i in self.nullable_index..end {
+            if validity[i] {
+                data_with_nulls[i] =
+                    (self.data[self.non_null_index / 8] & 0x1 << (self.non_null_index % 8)) != 0;
+                self.non_null_index += 1;
+            }
+        }
+        let mut generator = RowRangeSetGenerator::new(result_row_range_set);
+
+        for i in start..end {
+            let filter_res = filter.check_bool_with_validity(data_with_nulls[i], validity[i]);
+            generator.update(i + self.current_offset - offset, filter_res);
+            if filter_res {
+                result_bridge.append_result(validity[i], data_with_nulls[i]);
+            }
+        }
+
+        self.nullable_index = end;
+        Ok(end == self.num_values)
+    }
+
+    pub fn read_non_null_with_filter(
+        &self,
+        to_read: RowRange,
+        offset: usize,
+        result_row_range_set: &mut RowRangeSet,
+        result_bridge: &mut dyn Bridge<bool>,
+    ) -> Result<bool, BoltReaderError> {
+        let filter = self.filter.unwrap();
+        let start = to_read.begin + offset - self.current_offset;
+        let end = to_read.end + offset - self.current_offset;
+
+        let start_byte = start / 8;
+        let start_bit = start % 8;
+        let end_byte = end / 8;
+        let end_bit = end % 8;
+
+        let mut generator = RowRangeSetGenerator::new(result_row_range_set);
+        let mut index = start;
+        for i in start_bit..8 {
+            index = self.read_bit_with_filter(
+                self.data[start_byte],
+                index,
+                i,
+                filter,
+                index + self.current_offset - offset,
+                &mut generator,
+                result_bridge,
+            );
+        }
+
+        // This is to read 8 bits within a byte
+        for i in start_byte + 1..end_byte {
+            index = self.read_bit_with_filter(
+                self.data[i],
+                index,
+                0,
+                filter,
+                index + self.current_offset - offset,
+                &mut generator,
+                result_bridge,
+            );
+
+            index = self.read_bit_with_filter(
+                self.data[i],
+                index,
+                1,
+                filter,
+                index + self.current_offset - offset,
+                &mut generator,
+                result_bridge,
+            );
+
+            index = self.read_bit_with_filter(
+                self.data[i],
+                index,
+                2,
+                filter,
+                index + self.current_offset - offset,
+                &mut generator,
+                result_bridge,
+            );
+
+            index = self.read_bit_with_filter(
+                self.data[i],
+                index,
+                3,
+                filter,
+                index + self.current_offset - offset,
+                &mut generator,
+                result_bridge,
+            );
+
+            index = self.read_bit_with_filter(
+                self.data[i],
+                index,
+                4,
+                filter,
+                index + self.current_offset - offset,
+                &mut generator,
+                result_bridge,
+            );
+
+            index = self.read_bit_with_filter(
+                self.data[i],
+                index,
+                5,
+                filter,
+                index + self.current_offset - offset,
+                &mut generator,
+                result_bridge,
+            );
+
+            index = self.read_bit_with_filter(
+                self.data[i],
+                index,
+                6,
+                filter,
+                index + self.current_offset - offset,
+                &mut generator,
+                result_bridge,
+            );
+
+            index = self.read_bit_with_filter(
+                self.data[i],
+                index,
+                7,
+                filter,
+                index + self.current_offset - offset,
+                &mut generator,
+                result_bridge,
+            );
+        }
+
+        for i in 0..end_bit {
+            index = self.read_bit_with_filter(
+                self.data[end_byte],
+                index,
+                i,
+                filter,
+                index + self.current_offset - offset,
+                &mut generator,
+                result_bridge,
+            );
+        }
+        generator.finish(end + self.current_offset - offset);
+        Ok(end == self.num_values)
     }
 }
 
@@ -433,6 +515,35 @@ mod tests {
 
                 if let Some(filter) = filter {
                     assert!(filter.check_bool(value));
+                }
+            }
+        }
+    }
+
+    fn verify_nullable_result(
+        result_row_range_set: &RowRangeSet,
+        raw_bridge: &RawBridge<bool>,
+        filter: Option<&dyn FixedLengthRangeFilter>,
+    ) {
+        let offset = result_row_range_set.get_offset();
+        for row_range in result_row_range_set.get_row_ranges() {
+            for i in row_range.begin..row_range.end {
+                let (validity, value) = raw_bridge
+                    .get_validity_and_value(offset, i, &result_row_range_set)
+                    .unwrap();
+
+                if i % 5 == 0 || i % 17 == 0 {
+                    assert_eq!(validity, false);
+                } else {
+                    assert_eq!(validity, true);
+                    if i % 4 == 0 {
+                        assert_eq!(value, true);
+                    } else {
+                        assert_eq!(value, false);
+                    }
+                }
+                if let Some(filter) = filter {
+                    assert!(filter.check_bool_with_validity(value, validity));
                 }
             }
         }
@@ -689,6 +800,212 @@ mod tests {
             );
             assert!(res.is_ok());
             verify_non_null_result(&result_row_range_set, &raw_bridge, Some(&filter));
+            begin = end;
+        }
+    }
+
+    #[test]
+    fn test_read_nullable_boolean_data_page() {
+        let path = String::from("src/sample_files/boolean_column_with_nulls.parquet");
+        let res = LocalFileLoader::new(&path);
+        assert!(res.is_ok());
+        let file = res.unwrap();
+        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        assert!(res.is_ok());
+        let mut buf = res.unwrap();
+
+        let res = load_boolean_data_page(&mut buf, None, 100);
+
+        assert!(res.is_ok());
+        let mut boolean_page_reader = res.unwrap();
+
+        let num_values = boolean_page_reader.get_data_page_num_values();
+        let mut begin = 0;
+        let step = 10000;
+
+        while begin < num_values {
+            let end = min(begin + step, num_values);
+            let to_read = RowRange::new(begin, end);
+            let offset = boolean_page_reader.get_data_page_offset();
+            let capacity = step;
+
+            let to_read = get_data_page_covered_range(
+                boolean_page_reader.get_data_page_offset(),
+                boolean_page_reader.get_data_page_offset()
+                    + boolean_page_reader.get_data_page_num_values(),
+                offset,
+                &to_read,
+            );
+            assert!(to_read.is_ok());
+            let to_read = to_read.unwrap();
+            assert!(to_read.is_some());
+            let to_read = to_read.unwrap();
+
+            let mut result_row_range_set = RowRangeSet::new(offset);
+            let mut raw_bridge = RawBridge::new(false, capacity);
+            let res = boolean_page_reader.read(
+                to_read,
+                offset,
+                &mut result_row_range_set,
+                &mut raw_bridge,
+            );
+            assert!(res.is_ok());
+            verify_nullable_result(&result_row_range_set, &raw_bridge, None);
+            begin = end;
+        }
+    }
+
+    #[test]
+    fn test_read_nullable_boolean_data_page_with_filter() {
+        let path = String::from("src/sample_files/boolean_column_with_nulls.parquet");
+        let res = LocalFileLoader::new(&path);
+        assert!(res.is_ok());
+        let file = res.unwrap();
+        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        assert!(res.is_ok());
+        let mut buf = res.unwrap();
+        let filter = BooleanFilter::new(true, false);
+
+        let res = load_boolean_data_page(&mut buf, Some(&filter), 100);
+
+        assert!(res.is_ok());
+        let mut boolean_page_reader = res.unwrap();
+
+        let num_values = boolean_page_reader.get_data_page_num_values();
+        let mut begin = 0;
+        let step = 10000;
+
+        while begin < num_values {
+            let end = min(begin + step, num_values);
+            let to_read = RowRange::new(begin, end);
+            let offset = boolean_page_reader.get_data_page_offset();
+            let capacity = step;
+
+            let to_read = get_data_page_covered_range(
+                boolean_page_reader.get_data_page_offset(),
+                boolean_page_reader.get_data_page_offset()
+                    + boolean_page_reader.get_data_page_num_values(),
+                offset,
+                &to_read,
+            );
+            assert!(to_read.is_ok());
+            let to_read = to_read.unwrap();
+            assert!(to_read.is_some());
+            let to_read = to_read.unwrap();
+
+            let mut result_row_range_set = RowRangeSet::new(offset);
+            let mut raw_bridge = RawBridge::new(false, capacity);
+            let res = boolean_page_reader.read_with_filter(
+                to_read,
+                offset,
+                &mut result_row_range_set,
+                &mut raw_bridge,
+            );
+            assert!(res.is_ok());
+            verify_nullable_result(&result_row_range_set, &raw_bridge, Some(&filter));
+            begin = end;
+        }
+    }
+
+    #[test]
+    fn test_read_nullable_boolean_data_page_in_streaming_buffer() {
+        let path = String::from("src/sample_files/boolean_column_with_nulls.parquet");
+        let res = LocalFileLoader::new(&path);
+        assert!(res.is_ok());
+        let file = res.unwrap();
+        let res = StreamingByteBuffer::from_file(&file, 4, file.get_file_size() - 4, 64);
+        assert!(res.is_ok());
+        let mut buf = res.unwrap();
+
+        let res = load_boolean_data_page(&mut buf, None, 100);
+
+        assert!(res.is_ok());
+        let mut boolean_page_reader = res.unwrap();
+
+        let num_values = boolean_page_reader.get_data_page_num_values();
+        let mut begin = 0;
+        let step = 10000;
+
+        while begin < num_values {
+            let end = min(begin + step, num_values);
+            let to_read = RowRange::new(begin, end);
+            let offset = boolean_page_reader.get_data_page_offset();
+            let capacity = step;
+
+            let to_read = get_data_page_covered_range(
+                boolean_page_reader.get_data_page_offset(),
+                boolean_page_reader.get_data_page_offset()
+                    + boolean_page_reader.get_data_page_num_values(),
+                offset,
+                &to_read,
+            );
+            assert!(to_read.is_ok());
+            let to_read = to_read.unwrap();
+            assert!(to_read.is_some());
+            let to_read = to_read.unwrap();
+
+            let mut result_row_range_set = RowRangeSet::new(offset);
+            let mut raw_bridge = RawBridge::new(false, capacity);
+            let res = boolean_page_reader.read(
+                to_read,
+                offset,
+                &mut result_row_range_set,
+                &mut raw_bridge,
+            );
+            assert!(res.is_ok());
+            verify_nullable_result(&result_row_range_set, &raw_bridge, None);
+            begin = end;
+        }
+    }
+
+    #[test]
+    fn test_read_nullable_boolean_data_page_with_filter_in_streaming_buffer() {
+        let path = String::from("src/sample_files/boolean_column_with_nulls.parquet");
+        let res = LocalFileLoader::new(&path);
+        assert!(res.is_ok());
+        let file = res.unwrap();
+        let res = StreamingByteBuffer::from_file(&file, 4, file.get_file_size() - 4, 64);
+        assert!(res.is_ok());
+        let mut buf = res.unwrap();
+        let filter = BooleanFilter::new(true, false);
+
+        let res = load_boolean_data_page(&mut buf, Some(&filter), 100);
+
+        assert!(res.is_ok());
+        let mut boolean_page_reader = res.unwrap();
+
+        let num_values = boolean_page_reader.get_data_page_num_values();
+        let mut begin = 0;
+        let step = 10000;
+
+        while begin < num_values {
+            let end = min(begin + step, num_values);
+            let to_read = RowRange::new(begin, end);
+            let offset = boolean_page_reader.get_data_page_offset();
+            let capacity = step;
+
+            let to_read = get_data_page_covered_range(
+                boolean_page_reader.get_data_page_offset(),
+                boolean_page_reader.get_data_page_offset()
+                    + boolean_page_reader.get_data_page_num_values(),
+                offset,
+                &to_read,
+            );
+            assert!(to_read.is_ok());
+            let to_read = to_read.unwrap();
+            assert!(to_read.is_some());
+            let to_read = to_read.unwrap();
+
+            let mut result_row_range_set = RowRangeSet::new(offset);
+            let mut raw_bridge = RawBridge::new(false, capacity);
+            let res = boolean_page_reader.read_with_filter(
+                to_read,
+                offset,
+                &mut result_row_range_set,
+                &mut raw_bridge,
+            );
+            assert!(res.is_ok());
+            verify_nullable_result(&result_row_range_set, &raw_bridge, Some(&filter));
             begin = end;
         }
     }
