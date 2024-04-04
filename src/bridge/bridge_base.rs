@@ -15,7 +15,6 @@
 
 use crate::utils::exceptions::BoltReaderError;
 use crate::utils::row_range_set::RowRangeSet;
-
 pub trait Bridge<T> {
     fn get_bridge_name(&self) -> String;
 
