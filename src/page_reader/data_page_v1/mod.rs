@@ -15,3 +15,4 @@
 
 pub mod data_page_base;
 pub mod fixed_length_plain_data_page_v1;
+pub mod rle_bp_data_page_v1;
