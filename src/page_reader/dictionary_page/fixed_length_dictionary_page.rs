@@ -261,7 +261,6 @@ mod tests {
                 load_parquet_first_dictionary_page_streaming_buffer(&file, buffer_size);
             assert!(dic.is_ok());
             let dictionary = dic.unwrap();
-
             assert_eq!(dictionary.get_type_size(), 8);
 
             assert_eq!(*dictionary.find(0), 429);
