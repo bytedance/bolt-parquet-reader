@@ -32,6 +32,7 @@ pub enum BoltReaderError {
     RleBpDecodingError(String),
     FixedLengthDictionaryPageError(String),
     FixedLengthDataPageError(String),
+    BooleanDataPageError(String),
     BridgeError(String),
     RepDefError(String),
     FixedLengthColumnReaderError(String),
@@ -71,6 +72,9 @@ impl Display for BoltReaderError {
             }
             BoltReaderError::FixedLengthDataPageError(e) => {
                 writeln!(f, "Fixed Length Data Page Error: {e}")
+            }
+            BoltReaderError::BooleanDataPageError(e) => {
+                writeln!(f, "Boolean Data Page Error: {e}")
             }
             BoltReaderError::BridgeError(e) => {
                 writeln!(f, "Bridge Error: {e}")
