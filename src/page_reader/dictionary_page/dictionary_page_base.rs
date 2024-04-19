@@ -13,6 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::page_reader::dictionary_page::dictionary_page_float32::DictionaryPageFloat32;
+use crate::page_reader::dictionary_page::dictionary_page_float32_with_filters::DictionaryPageWithFilterFloat32;
+use crate::page_reader::dictionary_page::dictionary_page_float64::DictionaryPageFloat64;
+use crate::page_reader::dictionary_page::dictionary_page_float64_with_filters::DictionaryPageWithFilterFloat64;
+use crate::page_reader::dictionary_page::dictionary_page_int32::DictionaryPageInt32;
+use crate::page_reader::dictionary_page::dictionary_page_int32_with_filters::DictionaryPageWithFilterInt32;
+use crate::page_reader::dictionary_page::dictionary_page_int64::DictionaryPageInt64;
+use crate::page_reader::dictionary_page::dictionary_page_int64_with_filters::DictionaryPageWithFilterInt64;
+
+pub enum DictionaryPageEnum {
+    DictionaryPageInt32(DictionaryPageInt32),
+    DictionaryPageFloat32(DictionaryPageFloat32),
+    DictionaryPageInt64(DictionaryPageInt64),
+    DictionaryPageFloat64(DictionaryPageFloat64),
+    DictionaryPageWithFilterInt32(DictionaryPageWithFilterInt32),
+    DictionaryPageWithFilterFloat32(DictionaryPageWithFilterFloat32),
+    DictionaryPageWithFilterInt64(DictionaryPageWithFilterInt64),
+    DictionaryPageWithFilterFloat64(DictionaryPageWithFilterFloat64),
+}
+
 pub trait DictionaryPageNew {
     fn validate(&self, index: usize) -> bool;
 
@@ -37,6 +57,240 @@ pub trait DictionaryPageNew {
     fn get_type_size(&self) -> usize;
 
     fn is_zero_copied(&self) -> bool;
+}
+
+impl DictionaryPageNew for DictionaryPageEnum {
+    fn validate(&self, index: usize) -> bool {
+        match self {
+            DictionaryPageEnum::DictionaryPageInt32(dictionary_page) => {
+                dictionary_page.validate(index)
+            }
+            DictionaryPageEnum::DictionaryPageFloat32(dictionary_page) => {
+                dictionary_page.validate(index)
+            }
+            DictionaryPageEnum::DictionaryPageInt64(dictionary_page) => {
+                dictionary_page.validate(index)
+            }
+            DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.validate(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
+                dictionary_page.validate(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat32(dictionary_page) => {
+                dictionary_page.validate(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt64(dictionary_page) => {
+                dictionary_page.validate(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat64(dictionary_page) => {
+                dictionary_page.validate(index)
+            }
+        }
+    }
+
+    fn find_int32(&self, index: usize) -> i32 {
+        match self {
+            DictionaryPageEnum::DictionaryPageInt32(dictionary_page) => {
+                dictionary_page.find_int32(index)
+            }
+            DictionaryPageEnum::DictionaryPageFloat32(dictionary_page) => {
+                dictionary_page.find_int32(index)
+            }
+            DictionaryPageEnum::DictionaryPageInt64(dictionary_page) => {
+                dictionary_page.find_int32(index)
+            }
+            DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.find_int32(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
+                dictionary_page.find_int32(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat32(dictionary_page) => {
+                dictionary_page.find_int32(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt64(dictionary_page) => {
+                dictionary_page.find_int32(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat64(dictionary_page) => {
+                dictionary_page.find_int32(index)
+            }
+        }
+    }
+
+    fn find_float32(&self, index: usize) -> f32 {
+        match self {
+            DictionaryPageEnum::DictionaryPageInt32(dictionary_page) => {
+                dictionary_page.find_float32(index)
+            }
+            DictionaryPageEnum::DictionaryPageFloat32(dictionary_page) => {
+                dictionary_page.find_float32(index)
+            }
+            DictionaryPageEnum::DictionaryPageInt64(dictionary_page) => {
+                dictionary_page.find_float32(index)
+            }
+            DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.find_float32(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
+                dictionary_page.find_float32(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat32(dictionary_page) => {
+                dictionary_page.find_float32(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt64(dictionary_page) => {
+                dictionary_page.find_float32(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat64(dictionary_page) => {
+                dictionary_page.find_float32(index)
+            }
+        }
+    }
+
+    fn find_int64(&self, index: usize) -> i64 {
+        match self {
+            DictionaryPageEnum::DictionaryPageInt32(dictionary_page) => {
+                dictionary_page.find_int64(index)
+            }
+            DictionaryPageEnum::DictionaryPageFloat32(dictionary_page) => {
+                dictionary_page.find_int64(index)
+            }
+            DictionaryPageEnum::DictionaryPageInt64(dictionary_page) => {
+                dictionary_page.find_int64(index)
+            }
+            DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.find_int64(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
+                dictionary_page.find_int64(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat32(dictionary_page) => {
+                dictionary_page.find_int64(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt64(dictionary_page) => {
+                dictionary_page.find_int64(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat64(dictionary_page) => {
+                dictionary_page.find_int64(index)
+            }
+        }
+    }
+
+    fn find_float64(&self, index: usize) -> f64 {
+        match self {
+            DictionaryPageEnum::DictionaryPageInt32(dictionary_page) => {
+                dictionary_page.find_float64(index)
+            }
+            DictionaryPageEnum::DictionaryPageFloat32(dictionary_page) => {
+                dictionary_page.find_float64(index)
+            }
+            DictionaryPageEnum::DictionaryPageInt64(dictionary_page) => {
+                dictionary_page.find_float64(index)
+            }
+            DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.find_float64(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
+                dictionary_page.find_float64(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat32(dictionary_page) => {
+                dictionary_page.find_float64(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt64(dictionary_page) => {
+                dictionary_page.find_float64(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat64(dictionary_page) => {
+                dictionary_page.find_float64(index)
+            }
+        }
+    }
+
+    fn get_num_values(&self) -> usize {
+        match self {
+            DictionaryPageEnum::DictionaryPageInt32(dictionary_page) => {
+                dictionary_page.get_num_values()
+            }
+            DictionaryPageEnum::DictionaryPageFloat32(dictionary_page) => {
+                dictionary_page.get_num_values()
+            }
+            DictionaryPageEnum::DictionaryPageInt64(dictionary_page) => {
+                dictionary_page.get_num_values()
+            }
+            DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.get_num_values()
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
+                dictionary_page.get_num_values()
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat32(dictionary_page) => {
+                dictionary_page.get_num_values()
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt64(dictionary_page) => {
+                dictionary_page.get_num_values()
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat64(dictionary_page) => {
+                dictionary_page.get_num_values()
+            }
+        }
+    }
+
+    fn get_type_size(&self) -> usize {
+        match self {
+            DictionaryPageEnum::DictionaryPageInt32(dictionary_page) => {
+                dictionary_page.get_type_size()
+            }
+            DictionaryPageEnum::DictionaryPageFloat32(dictionary_page) => {
+                dictionary_page.get_type_size()
+            }
+            DictionaryPageEnum::DictionaryPageInt64(dictionary_page) => {
+                dictionary_page.get_type_size()
+            }
+            DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.get_type_size()
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
+                dictionary_page.get_type_size()
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat32(dictionary_page) => {
+                dictionary_page.get_type_size()
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt64(dictionary_page) => {
+                dictionary_page.get_type_size()
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat64(dictionary_page) => {
+                dictionary_page.get_type_size()
+            }
+        }
+    }
+
+    fn is_zero_copied(&self) -> bool {
+        match self {
+            DictionaryPageEnum::DictionaryPageInt32(dictionary_page) => {
+                dictionary_page.is_zero_copied()
+            }
+            DictionaryPageEnum::DictionaryPageFloat32(dictionary_page) => {
+                dictionary_page.is_zero_copied()
+            }
+            DictionaryPageEnum::DictionaryPageInt64(dictionary_page) => {
+                dictionary_page.is_zero_copied()
+            }
+            DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.is_zero_copied()
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
+                dictionary_page.is_zero_copied()
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat32(dictionary_page) => {
+                dictionary_page.is_zero_copied()
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt64(dictionary_page) => {
+                dictionary_page.is_zero_copied()
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat64(dictionary_page) => {
+                dictionary_page.is_zero_copied()
+            }
+        }
+    }
 }
 
 pub trait DictionaryPage<T> {
