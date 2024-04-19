@@ -122,7 +122,6 @@ impl ByteBufferBase for DirectByteBuffer {
         self.set_rpos(pos);
     }
 
-    #[inline(always)]
     fn read_u8(&mut self) -> Result<u8, BoltReaderError> {
         match self.read_u8() {
             Ok(res) => Ok(res),
