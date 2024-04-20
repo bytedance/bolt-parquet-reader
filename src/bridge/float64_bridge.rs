@@ -74,7 +74,7 @@ impl Float64Bridge {
     pub fn new(may_has_null: bool, capacity: usize) -> Float64Bridge {
         Float64Bridge {
             bridge_type: BridgeType::RustVec,
-            bridge_data_type: BridgeDataType::Int32,
+            bridge_data_type: BridgeDataType::Float64,
             may_has_null,
             non_null_data: Vec::with_capacity(capacity),
             nullable_data: Vec::with_capacity(capacity),

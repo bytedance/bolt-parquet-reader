@@ -14,8 +14,40 @@
 // limitations under the License.
 
 use crate::bridge::bridge_base::Bridge;
+use crate::bridge::result_bridge::ResultBridge;
 use crate::utils::exceptions::BoltReaderError;
 use crate::utils::row_range_set::{RowRange, RowRangeSet};
+
+pub enum PhysicalDataType {
+    Boolean,
+    Int32,
+    Int64,
+    Float32,
+    Float64,
+    None,
+}
+
+pub trait ColumnReaderNew {
+    fn get_column_num_values(&self) -> usize;
+
+    fn get_data_type_size(&self) -> usize;
+
+    fn read(
+        &mut self,
+        to_read: RowRange,
+        to_read_offset: usize,
+        result_row_range_set: &mut RowRangeSet,
+        result_bridge: &mut dyn ResultBridge,
+    ) -> Result<(), BoltReaderError>;
+
+    fn read_with_filter(
+        &mut self,
+        to_read: RowRange,
+        to_read_offset: usize,
+        result_row_range_set: &mut RowRangeSet,
+        result_bridge: &mut dyn ResultBridge,
+    ) -> Result<(), BoltReaderError>;
+}
 
 pub trait ColumnReader<T> {
     fn get_column_num_values(&self) -> usize;

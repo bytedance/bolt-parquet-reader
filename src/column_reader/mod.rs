@@ -15,3 +15,4 @@
 
 pub mod column_reader_base;
 pub mod fixed_length_column_reader;
+pub mod primitive_column_reader;

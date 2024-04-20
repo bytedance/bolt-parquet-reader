@@ -36,6 +36,7 @@ pub enum BoltReaderError {
     BridgeError(String),
     RepDefError(String),
     FixedLengthColumnReaderError(String),
+    PrimitiveColumnReaderError(String),
 }
 
 impl Error for BoltReaderError {}
@@ -84,6 +85,9 @@ impl Display for BoltReaderError {
             }
             BoltReaderError::FixedLengthColumnReaderError(e) => {
                 writeln!(f, "Fixed Length Column Reader Error: {e}")
+            }
+            BoltReaderError::PrimitiveColumnReaderError(e) => {
+                writeln!(f, "Primitive Column Reader Error: {e}")
             }
         }
     }
