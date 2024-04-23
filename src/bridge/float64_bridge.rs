@@ -206,12 +206,6 @@ impl ResultBridge for Float64Bridge {
         other_ranges: &RowRangeSet,
         result_bridge: &mut dyn ResultBridge,
     ) -> Result<(), BoltReaderError> {
-        if self.is_empty() {
-            return Err(BoltReaderError::BridgeError(String::from(
-                "Boolean Raw Bridge: Can't retrieve values from an empty raw bridge",
-            )));
-        }
-
         result_bridge.set_may_has_null(self.may_has_null);
 
         let mut self_range_idx = 0;

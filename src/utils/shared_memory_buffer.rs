@@ -39,7 +39,7 @@ pub struct SharedMemoryBuffer {
 impl Read for SharedMemoryBuffer {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let read_len = std::cmp::min(self.len() - self.rpos, buf.len());
-        let range = self.rpos..self.rpos + read_len;
+        let range = self.rpos + self.buffer_offset..self.rpos + self.buffer_offset + read_len;
         for (i, val) in self.buffer[range].iter().enumerate() {
             buf[i] = *val;
         }
@@ -72,7 +72,7 @@ impl ByteBufferBase for SharedMemoryBuffer {
                 end
             )));
         }
-        Ok(&self.buffer[start - self.buffer_offset..end - self.buffer_offset])
+        Ok(&self.buffer[start + self.buffer_offset..end + self.buffer_offset])
     }
 
     fn get_rpos(&self) -> usize {
@@ -101,7 +101,7 @@ impl ByteBufferBase for SharedMemoryBuffer {
                 "Shared Memroy Buffer: Can not read_u32()",
             )));
         }
-        let range = self.rpos..self.rpos + 4;
+        let range = self.buffer_offset + self.rpos..self.buffer_offset + self.rpos + 4;
         self.rpos += 4;
 
         Ok(LittleEndian::read_u32(&self.buffer[range]))

@@ -18,6 +18,7 @@
 #![feature(core_intrinsics)]
 pub mod bridge;
 pub mod column_reader;
+pub mod file_reader;
 pub mod filters;
 pub mod metadata;
 pub mod page_reader;

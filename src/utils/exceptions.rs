@@ -38,6 +38,7 @@ pub enum BoltReaderError {
     RepDefError(String),
     FixedLengthColumnReaderError(String),
     PrimitiveColumnReaderError(String),
+    RowGroupReaderError(String),
 }
 
 impl Error for BoltReaderError {}
@@ -92,6 +93,9 @@ impl Display for BoltReaderError {
             }
             BoltReaderError::PrimitiveColumnReaderError(e) => {
                 writeln!(f, "Primitive Column Reader Error: {e}")
+            }
+            BoltReaderError::RowGroupReaderError(e) => {
+                writeln!(f, "Row Group Reader Error: {e}")
             }
         }
     }
