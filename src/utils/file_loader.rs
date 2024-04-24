@@ -21,6 +21,12 @@ pub trait LoadFile {
 
     fn get_file_size(&self) -> usize;
 
+    fn load_file_to_raw_buffer(
+        &self,
+        offset: usize,
+        length: usize,
+    ) -> Result<Vec<u8>, BoltReaderError>;
+
     fn load_file_to_buffer(
         &self,
         offset: usize,

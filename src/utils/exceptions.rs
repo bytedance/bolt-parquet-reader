@@ -26,6 +26,7 @@ pub enum BoltReaderError {
     InsufficientMemoryError(String),
     NotYetImplementedError(String),
     InternalError(String),
+    BufferError(String),
     FileFormatError(String),
     MetadataError(String),
     VarintDecodingError(String),
@@ -55,6 +56,9 @@ impl Display for BoltReaderError {
             }
             BoltReaderError::InternalError(e) => {
                 writeln!(f, "Internal Error: {e}")
+            }
+            BoltReaderError::BufferError(e) => {
+                writeln!(f, "Buffer Error: {e}")
             }
             BoltReaderError::FileFormatError(e) => {
                 writeln!(f, "File Format Error: {e}")

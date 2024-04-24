@@ -20,10 +20,12 @@ use crate::convert_generic_vec;
 use crate::utils::direct_byte_buffer::{ByteBufferSlice, DirectByteBuffer};
 use crate::utils::exceptions::BoltReaderError;
 use crate::utils::file_streaming_byte_buffer::StreamingByteBuffer;
+use crate::utils::shared_memory_buffer::SharedMemoryBuffer;
 
 pub enum BufferEnum<'a> {
     DirectByteBuffer(DirectByteBuffer),
     StreamingByteBuffer(StreamingByteBuffer<'a>),
+    SharedMemoryBuffer(SharedMemoryBuffer),
 }
 
 impl Read for BufferEnum<'_> {
@@ -31,6 +33,7 @@ impl Read for BufferEnum<'_> {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => buffer.read(buf),
             BufferEnum::StreamingByteBuffer(buffer) => buffer.read(buf),
+            BufferEnum::SharedMemoryBuffer(buffer) => buffer.read(buf),
         }
     }
 }
@@ -40,6 +43,7 @@ impl ByteBufferBase for BufferEnum<'_> {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => buffer.can_create_buffer_slice(start, len),
             BufferEnum::StreamingByteBuffer(buffer) => buffer.can_create_buffer_slice(start, len),
+            BufferEnum::SharedMemoryBuffer(buffer) => buffer.can_create_buffer_slice(start, len),
         }
     }
 
@@ -51,13 +55,15 @@ impl ByteBufferBase for BufferEnum<'_> {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => buffer.create_buffer_slice(start, len),
             BufferEnum::StreamingByteBuffer(buffer) => buffer.create_buffer_slice(start, len),
+            BufferEnum::SharedMemoryBuffer(buffer) => buffer.create_buffer_slice(start, len),
         }
     }
 
-    fn get_direct_byte_buffer(&mut self) -> &mut DirectByteBuffer {
+    fn get_direct_byte_buffer(&mut self) -> Result<&mut DirectByteBuffer, BoltReaderError> {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => buffer.get_direct_byte_buffer(),
             BufferEnum::StreamingByteBuffer(buffer) => buffer.get_direct_byte_buffer(),
+            BufferEnum::SharedMemoryBuffer(buffer) => buffer.get_direct_byte_buffer(),
         }
     }
 
@@ -65,6 +71,7 @@ impl ByteBufferBase for BufferEnum<'_> {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => buffer.get_rpos(),
             BufferEnum::StreamingByteBuffer(buffer) => buffer.get_rpos(),
+            BufferEnum::SharedMemoryBuffer(buffer) => buffer.get_rpos(),
         }
     }
 
@@ -72,6 +79,7 @@ impl ByteBufferBase for BufferEnum<'_> {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => buffer.set_rpos(pos),
             BufferEnum::StreamingByteBuffer(buffer) => buffer.set_rpos(pos),
+            BufferEnum::SharedMemoryBuffer(buffer) => buffer.set_rpos(pos),
         }
     }
 
@@ -79,6 +87,7 @@ impl ByteBufferBase for BufferEnum<'_> {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => ByteBufferBase::read_u8(buffer),
             BufferEnum::StreamingByteBuffer(buffer) => buffer.read_u8(),
+            BufferEnum::SharedMemoryBuffer(buffer) => buffer.read_u8(),
         }
     }
 
@@ -86,6 +95,7 @@ impl ByteBufferBase for BufferEnum<'_> {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => ByteBufferBase::read_u32(buffer),
             BufferEnum::StreamingByteBuffer(buffer) => buffer.read_u32(),
+            BufferEnum::SharedMemoryBuffer(buffer) => buffer.read_u32(),
         }
     }
 
@@ -93,6 +103,7 @@ impl ByteBufferBase for BufferEnum<'_> {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => buffer.len(),
             BufferEnum::StreamingByteBuffer(buffer) => buffer.len(),
+            BufferEnum::SharedMemoryBuffer(buffer) => buffer.len(),
         }
     }
 
@@ -100,6 +111,7 @@ impl ByteBufferBase for BufferEnum<'_> {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => buffer.is_empty(),
             BufferEnum::StreamingByteBuffer(buffer) => buffer.is_empty(),
+            BufferEnum::SharedMemoryBuffer(buffer) => buffer.is_empty(),
         }
     }
 
@@ -111,6 +123,7 @@ impl ByteBufferBase for BufferEnum<'_> {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => buffer.load_bytes_to_byte_vec(start, length),
             BufferEnum::StreamingByteBuffer(buffer) => buffer.load_bytes_to_byte_vec(start, length),
+            BufferEnum::SharedMemoryBuffer(buffer) => buffer.load_bytes_to_byte_vec(start, length),
         }
     }
 
@@ -126,6 +139,9 @@ impl ByteBufferBase for BufferEnum<'_> {
             BufferEnum::StreamingByteBuffer(buffer) => {
                 buffer.load_bytes_to_byte_vec_deep_copy(start, length)
             }
+            BufferEnum::SharedMemoryBuffer(buffer) => {
+                buffer.load_bytes_to_byte_vec_deep_copy(start, length)
+            }
         }
     }
 }
@@ -139,7 +155,11 @@ pub trait ByteBufferBase: std::io::Read {
         len: usize,
     ) -> Result<ByteBufferSlice<'_>, BoltReaderError>;
 
-    fn get_direct_byte_buffer(&mut self) -> &mut DirectByteBuffer;
+    fn get_direct_byte_buffer(&mut self) -> Result<&mut DirectByteBuffer, BoltReaderError> {
+        Err(BoltReaderError::BufferError(String::from(
+            "get_direct_byte_buffer() is not supported",
+        )))
+    }
 
     fn get_rpos(&self) -> usize;
 
