@@ -15,7 +15,6 @@
 
 use std::intrinsics::unlikely;
 
-use crate::bridge::bridge_base::Bridge;
 use crate::bridge::result_bridge::ResultBridge;
 use crate::page_reader::data_page_v1::boolean_data_page_v1::BooleanDataPageReaderV1;
 use crate::page_reader::data_page_v1::plain_data_page_float32_v1::PlainDataPageReaderFloat32V1;
@@ -41,7 +40,7 @@ pub enum DataPageEnum<'a> {
     RleBpDataPageReaderFloat64V1(RleBpDataPageReaderFloat64V1<'a>),
 }
 
-pub trait DataPageNew {
+pub trait DataPage {
     fn data_page_has_null(&self) -> bool;
 
     fn get_data_page_num_values(&self) -> usize;
@@ -69,7 +68,7 @@ pub trait DataPageNew {
     ) -> Result<bool, BoltReaderError>;
 }
 
-impl<'a> DataPageNew for DataPageEnum<'a> {
+impl<'a> DataPage for DataPageEnum<'a> {
     fn data_page_has_null(&self) -> bool {
         match self {
             DataPageEnum::BooleanDataPageReaderV1(page_reader) => page_reader.data_page_has_null(),
@@ -287,34 +286,6 @@ impl<'a> DataPageNew for DataPageEnum<'a> {
     }
 }
 
-pub trait DataPage<T> {
-    fn data_page_has_null(&self) -> bool;
-
-    fn get_data_page_num_values(&self) -> usize;
-
-    fn get_data_page_offset(&self) -> usize;
-
-    fn get_data_page_type_size(&self) -> usize;
-
-    fn is_zero_copied(&self) -> bool;
-
-    fn read(
-        &mut self,
-        to_read: RowRange,
-        offset: usize,
-        result_row_range_set: &mut RowRangeSet,
-        result_bridge: &mut dyn Bridge<T>,
-    ) -> Result<bool, BoltReaderError>;
-
-    fn read_with_filter(
-        &mut self,
-        to_read: RowRange,
-        offset: usize,
-        result_row_range_set: &mut RowRangeSet,
-        result_bridge: &mut dyn Bridge<T>,
-    ) -> Result<bool, BoltReaderError>;
-}
-
 pub fn get_data_page_covered_range(
     page_begin: usize,
     page_end: usize,
@@ -342,24 +313,23 @@ pub fn get_data_page_remaining_range(
 
 #[cfg(test)]
 mod tests {
-    use std::mem;
 
     use crate::metadata::page_header::read_page_header;
     use crate::page_reader::data_page_v1::data_page_base::{
         get_data_page_covered_range, get_data_page_remaining_range, DataPage,
     };
-    use crate::page_reader::data_page_v1::fixed_length_plain_data_page_v1::FixedLengthPlainDataPageReaderV1;
+    use crate::page_reader::data_page_v1::plain_data_page_int64_v1::PlainDataPageReaderInt64V1;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
     use crate::utils::file_loader::LoadFile;
     use crate::utils::local_file_loader::LocalFileLoader;
     use crate::utils::row_range_set::RowRange;
 
-    fn load_plain_data_page<'a, T: 'static + std::marker::Copy + std::default::Default>(
+    fn load_plain_data_page<'a>(
         data_page_offset: usize,
         path: String,
     ) -> (
-        Result<FixedLengthPlainDataPageReaderV1<'a, T>, BoltReaderError>,
+        Result<PlainDataPageReaderInt64V1<'a>, BoltReaderError>,
         DirectByteBuffer,
     ) {
         let res = LocalFileLoader::new(&path);
@@ -378,11 +348,11 @@ mod tests {
         let data_size = page_header.uncompressed_page_size - 8;
 
         (
-            FixedLengthPlainDataPageReaderV1::new(
+            PlainDataPageReaderInt64V1::new(
                 &page_header,
                 &mut buf,
                 data_page_offset,
-                mem::size_of::<T>(),
+                8,
                 false,
                 data_size as usize,
                 None,
@@ -397,7 +367,7 @@ mod tests {
         let path = String::from("src/sample_files/linitem_plain_data_page");
         let data_page_offset = 100;
 
-        let (data_page, _buffer): (Result<FixedLengthPlainDataPageReaderV1<i64>, _>, _) =
+        let (data_page, _buffer): (Result<PlainDataPageReaderInt64V1, _>, _) =
             load_plain_data_page(data_page_offset, path);
         assert!(data_page.is_ok());
 
@@ -442,7 +412,7 @@ mod tests {
         let path = String::from("src/sample_files/linitem_plain_data_page");
         let data_page_offset = 100;
 
-        let (data_page, _buffer): (Result<FixedLengthPlainDataPageReaderV1<i64>, _>, _) =
+        let (data_page, _buffer): (Result<PlainDataPageReaderInt64V1, _>, _) =
             load_plain_data_page(data_page_offset, path);
         assert!(data_page.is_ok());
 
@@ -467,7 +437,7 @@ mod tests {
         let path = String::from("src/sample_files/linitem_plain_data_page");
         let data_page_offset = 100;
 
-        let (data_page, _buffer): (Result<FixedLengthPlainDataPageReaderV1<i64>, _>, _) =
+        let (data_page, _buffer): (Result<PlainDataPageReaderInt64V1, _>, _) =
             load_plain_data_page(data_page_offset, path);
         assert!(data_page.is_ok());
 
@@ -490,7 +460,7 @@ mod tests {
         let path = String::from("src/sample_files/linitem_plain_data_page");
         let data_page_offset = 100;
 
-        let (data_page, _buffer): (Result<FixedLengthPlainDataPageReaderV1<i64>, _>, _) =
+        let (data_page, _buffer): (Result<PlainDataPageReaderInt64V1, _>, _) =
             load_plain_data_page(data_page_offset, path);
         assert!(data_page.is_ok());
 
@@ -535,7 +505,7 @@ mod tests {
         let path = String::from("src/sample_files/linitem_plain_data_page");
         let data_page_offset = 100;
 
-        let (data_page, _buffer): (Result<FixedLengthPlainDataPageReaderV1<i64>, _>, _) =
+        let (data_page, _buffer): (Result<PlainDataPageReaderInt64V1, _>, _) =
             load_plain_data_page(data_page_offset, path);
         assert!(data_page.is_ok());
 
@@ -560,7 +530,7 @@ mod tests {
         let path = String::from("src/sample_files/linitem_plain_data_page");
         let data_page_offset = 100;
 
-        let (data_page, _buffer): (Result<FixedLengthPlainDataPageReaderV1<i64>, _>, _) =
+        let (data_page, _buffer): (Result<PlainDataPageReaderInt64V1, _>, _) =
             load_plain_data_page(data_page_offset, path);
         assert!(data_page.is_ok());
 

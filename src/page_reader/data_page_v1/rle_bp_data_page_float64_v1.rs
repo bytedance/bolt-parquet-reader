@@ -20,7 +20,7 @@ use crate::bridge::result_bridge::ResultBridge;
 use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
 use crate::metadata::parquet_metadata_thrift;
 use crate::metadata::parquet_metadata_thrift::PageHeader;
-use crate::page_reader::data_page_v1::data_page_base::DataPageNew;
+use crate::page_reader::data_page_v1::data_page_base::DataPage;
 use crate::page_reader::dictionary_page::dictionary_page_base::{
     DictionaryPageEnum, DictionaryPageNew,
 };
@@ -84,7 +84,7 @@ impl<'a> std::fmt::Display for RleBpDataPageReaderFloat64V1<'a> {
     }
 }
 
-impl<'a> DataPageNew for RleBpDataPageReaderFloat64V1<'a> {
+impl<'a> DataPage for RleBpDataPageReaderFloat64V1<'a> {
     fn data_page_has_null(&self) -> bool {
         self.has_null
     }
@@ -324,9 +324,7 @@ mod tests {
     use crate::filters::integer_range_filter::IntegerRangeFilter;
     use crate::metadata::page_header::read_page_header;
     use crate::metadata::parquet_metadata_thrift::Encoding;
-    use crate::page_reader::data_page_v1::data_page_base::{
-        get_data_page_covered_range, DataPageNew,
-    };
+    use crate::page_reader::data_page_v1::data_page_base::{get_data_page_covered_range, DataPage};
     use crate::page_reader::data_page_v1::rle_bp_data_page_float64_v1::RleBpDataPageReaderFloat64V1;
     use crate::page_reader::dictionary_page::dictionary_page_base::DictionaryPageEnum;
     use crate::page_reader::dictionary_page::dictionary_page_float64::DictionaryPageFloat64;

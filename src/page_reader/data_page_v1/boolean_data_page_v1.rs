@@ -20,7 +20,7 @@ use crate::bridge::result_bridge::ResultBridge;
 use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
 use crate::metadata::parquet_metadata_thrift;
 use crate::metadata::parquet_metadata_thrift::PageHeader;
-use crate::page_reader::data_page_v1::data_page_base::DataPageNew;
+use crate::page_reader::data_page_v1::data_page_base::DataPage;
 use crate::utils::byte_buffer_base::ByteBufferBase;
 use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
 use crate::utils::exceptions::BoltReaderError;
@@ -63,7 +63,7 @@ impl<'a> std::fmt::Display for BooleanDataPageReaderV1<'a> {
     }
 }
 
-impl<'a> DataPageNew for BooleanDataPageReaderV1<'a> {
+impl<'a> DataPage for BooleanDataPageReaderV1<'a> {
     fn data_page_has_null(&self) -> bool {
         self.has_null
     }
@@ -455,9 +455,7 @@ mod tests {
     use crate::metadata::page_header::read_page_header;
     use crate::metadata::parquet_metadata_thrift::Encoding;
     use crate::page_reader::data_page_v1::boolean_data_page_v1::BooleanDataPageReaderV1;
-    use crate::page_reader::data_page_v1::data_page_base::{
-        get_data_page_covered_range, DataPageNew,
-    };
+    use crate::page_reader::data_page_v1::data_page_base::{get_data_page_covered_range, DataPage};
     use crate::utils::byte_buffer_base::ByteBufferBase;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;

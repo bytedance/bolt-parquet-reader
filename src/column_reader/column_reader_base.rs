@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::bridge::bridge_base::Bridge;
 use crate::bridge::result_bridge::ResultBridge;
 use crate::utils::exceptions::BoltReaderError;
 use crate::utils::row_range_set::{RowRange, RowRangeSet};
@@ -27,7 +26,7 @@ pub enum PhysicalDataType {
     None,
 }
 
-pub trait ColumnReaderNew {
+pub trait ColumnReader {
     fn get_physical_type(&self) -> &PhysicalDataType;
 
     fn get_column_num_values(&self) -> usize;
@@ -50,27 +49,5 @@ pub trait ColumnReaderNew {
         to_read_offset: usize,
         result_row_range_set: &mut RowRangeSet,
         result_bridge: &mut dyn ResultBridge,
-    ) -> Result<(), BoltReaderError>;
-}
-
-pub trait ColumnReader<T> {
-    fn get_column_num_values(&self) -> usize;
-
-    fn get_data_type_size(&self) -> usize;
-
-    fn read(
-        &mut self,
-        to_read: RowRange,
-        to_read_offset: usize,
-        result_row_range_set: &mut RowRangeSet,
-        result_bridge: &mut dyn Bridge<T>,
-    ) -> Result<(), BoltReaderError>;
-
-    fn read_with_filter(
-        &mut self,
-        to_read: RowRange,
-        to_read_offset: usize,
-        result_row_range_set: &mut RowRangeSet,
-        result_bridge: &mut dyn Bridge<T>,
     ) -> Result<(), BoltReaderError>;
 }
