@@ -167,6 +167,8 @@ impl DictionaryPageWithFilterInt64 {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
     use crate::filters::integer_range_filter::IntegerRangeFilter;
     use crate::metadata::page_header::read_page_header;
@@ -177,7 +179,7 @@ mod tests {
     use crate::utils::byte_buffer_base::ByteBufferBase;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
-    use crate::utils::file_loader::LoadFile;
+    use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
     use crate::utils::file_streaming_byte_buffer::{FileStreamingBuffer, StreamingByteBuffer};
     use crate::utils::local_file_loader::LocalFileLoader;
 
@@ -207,8 +209,8 @@ mod tests {
         let filter = IntegerRangeFilter::new(100, 200, false);
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_dictionary_page_int64_with_filter(&mut buf, &filter);
@@ -216,7 +218,7 @@ mod tests {
         assert!(res.is_ok());
         let dictionary_page_zero_copy = res.unwrap();
 
-        let res = StreamingByteBuffer::from_file(&file, 4, file.get_file_size() - 4, 64);
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4, 64);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_dictionary_page_int64_with_filter(&mut buf, &filter);
@@ -236,8 +238,8 @@ mod tests {
         let filter = IntegerRangeFilter::new(100, 200, false);
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_dictionary_page_int64_with_filter(&mut buf, &filter);
@@ -245,7 +247,7 @@ mod tests {
         assert!(res.is_ok());
         let dictionary_page_zero_copy = res.unwrap();
 
-        let res = StreamingByteBuffer::from_file(&file, 4, file.get_file_size() - 4, 64);
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4, 64);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_dictionary_page_int64_with_filter(&mut buf, &filter);
@@ -265,8 +267,8 @@ mod tests {
         let filter = IntegerRangeFilter::new(100, 200, false);
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_dictionary_page_int64_with_filter(&mut buf, &filter);
@@ -286,8 +288,8 @@ mod tests {
         let filter = IntegerRangeFilter::new(100, 200, false);
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = StreamingByteBuffer::from_file(&file, 4, file.get_file_size() - 4, 64);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4, 64);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_dictionary_page_int64_with_filter(&mut buf, &filter);
@@ -307,8 +309,8 @@ mod tests {
         let filter = IntegerRangeFilter::new(100, 200, false);
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_dictionary_page_int64_with_filter(&mut buf, &filter);
@@ -328,8 +330,8 @@ mod tests {
         let filter = IntegerRangeFilter::new(100, 200, false);
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = StreamingByteBuffer::from_file(&file, 4, file.get_file_size() - 4, 64);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4, 64);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_dictionary_page_int64_with_filter(&mut buf, &filter);

@@ -196,6 +196,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::mem;
+    use std::rc::Rc;
 
     use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
     use crate::filters::integer_range_filter::IntegerRangeFilter;
@@ -206,7 +207,7 @@ mod tests {
     use crate::utils::byte_buffer_base::ByteBufferBase;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
-    use crate::utils::file_loader::LoadFile;
+    use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
     use crate::utils::file_streaming_byte_buffer::{FileStreamingBuffer, StreamingByteBuffer};
     use crate::utils::local_file_loader::LocalFileLoader;
 
@@ -219,9 +220,9 @@ mod tests {
     ) {
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
 
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let page_header = read_page_header(&mut buf);
@@ -240,14 +241,15 @@ mod tests {
     }
 
     fn load_parquet_first_dictionary_page_streaming_buffer<'a, T: std::marker::Copy + 'static>(
-        file: &'a (dyn LoadFile + 'a),
+        file: Rc<FileLoaderEnum>,
         filter: &dyn FixedLengthRangeFilter,
         buffer_size: usize,
     ) -> (
         Result<FixedLengthDictionaryWithFilter<T>, BoltReaderError>,
-        StreamingByteBuffer<'a>,
+        StreamingByteBuffer,
     ) {
-        let res = StreamingByteBuffer::from_file(file, 4, file.get_file_size() - 4, buffer_size);
+        let res =
+            StreamingByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4, buffer_size);
 
         assert!(res.is_ok());
         let mut buf = res.unwrap();
@@ -301,13 +303,17 @@ mod tests {
         let path = String::from("src/sample_files/lineitem_dictionary.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
         let filter = IntegerRangeFilter::new(54914, 54930, true);
 
         for i in 0..16 {
             let buffer_size = 1 << i;
             let (dic, buffer): (Result<FixedLengthDictionaryWithFilter<i64>, _>, _) =
-                load_parquet_first_dictionary_page_streaming_buffer(&file, &filter, buffer_size);
+                load_parquet_first_dictionary_page_streaming_buffer(
+                    file.clone(),
+                    &filter,
+                    buffer_size,
+                );
             assert!(dic.is_ok());
             let dictionary = dic.unwrap();
 
@@ -347,13 +353,17 @@ mod tests {
         let path = String::from("src/sample_files/lineitem.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
         let filter = IntegerRangeFilter::new(54914, 54930, true);
 
         for i in 0..16 {
             let buffer_size = 1 << i;
             let (dic, _buffer): (Result<FixedLengthDictionaryWithFilter<i64>, _>, _) =
-                load_parquet_first_dictionary_page_streaming_buffer(&file, &filter, buffer_size);
+                load_parquet_first_dictionary_page_streaming_buffer(
+                    file.clone(),
+                    &filter,
+                    buffer_size,
+                );
             assert!(dic.is_err());
         }
     }

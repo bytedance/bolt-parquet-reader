@@ -18,16 +18,17 @@ use std::fs::File;
 use std::intrinsics::unlikely;
 use std::io::{Read, Seek, SeekFrom};
 use std::mem;
+use std::rc::Rc;
 
 use crate::convert_generic_vec;
 use crate::utils::byte_buffer_base::ByteBufferBase;
 use crate::utils::direct_byte_buffer::{Buffer, ByteBufferSlice, DirectByteBuffer};
 use crate::utils::exceptions::BoltReaderError;
-use crate::utils::file_loader::LoadFile;
+use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
 
-pub struct StreamingByteBuffer<'a> {
+pub struct StreamingByteBuffer {
     buffer: DirectByteBuffer,
-    source: &'a dyn LoadFile,
+    source: Rc<FileLoaderEnum>,
     direct_buffer_size: usize,
     buffer_offset: usize,
     file_offset: usize,
@@ -37,7 +38,7 @@ pub struct StreamingByteBuffer<'a> {
 
 pub trait FileStreamingBuffer {
     fn from_file(
-        source: &dyn LoadFile,
+        source: Rc<FileLoaderEnum>,
         offset: usize,
         length: usize,
         buffer_size: usize,
@@ -45,7 +46,7 @@ pub trait FileStreamingBuffer {
 
     fn update_buffer(&mut self, new_buffer: DirectByteBuffer);
 
-    fn get_source(&self) -> &dyn LoadFile;
+    fn get_source(&self) -> Rc<FileLoaderEnum>;
 
     fn get_file_offset(&self) -> usize;
 
@@ -54,27 +55,28 @@ pub trait FileStreamingBuffer {
     fn reload(&mut self, start: usize) -> Result<(), BoltReaderError>;
 }
 
-impl FileStreamingBuffer for StreamingByteBuffer<'_> {
+impl FileStreamingBuffer for StreamingByteBuffer {
     fn from_file(
-        source: &dyn LoadFile,
+        source: Rc<FileLoaderEnum>,
         file_offset: usize,
         length: usize,
         buffer_size: usize,
     ) -> Result<StreamingByteBuffer, BoltReaderError> {
         let buffer = DirectByteBuffer::from_file(
-            source,
+            source.clone(),
             file_offset,
             min(buffer_size, min(length, source.get_file_size())),
         )?;
 
         let direct_buffer_size = buffer.len();
+        let file_size = source.get_file_size();
         Ok(StreamingByteBuffer {
             buffer,
             source,
             direct_buffer_size,
             buffer_offset: 0,
             file_offset,
-            total_size: min(length, source.get_file_size()) - file_offset,
+            total_size: min(length, file_size) - file_offset,
             buffer_size,
         })
     }
@@ -85,8 +87,8 @@ impl FileStreamingBuffer for StreamingByteBuffer<'_> {
     }
 
     #[inline(always)]
-    fn get_source(&self) -> &dyn LoadFile {
-        self.source
+    fn get_source(&self) -> Rc<FileLoaderEnum> {
+        self.source.clone()
     }
 
     #[inline(always)]
@@ -126,7 +128,7 @@ impl FileStreamingBuffer for StreamingByteBuffer<'_> {
     }
 }
 
-impl Read for StreamingByteBuffer<'_> {
+impl Read for StreamingByteBuffer {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let read_len = std::cmp::min(
             self.total_size - self.buffer_offset - self.buffer.get_rpos(),
@@ -155,7 +157,7 @@ impl Read for StreamingByteBuffer<'_> {
     }
 }
 
-impl ByteBufferBase for StreamingByteBuffer<'_> {
+impl ByteBufferBase for StreamingByteBuffer {
     #[inline(always)]
     fn can_create_buffer_slice(&self, start: usize, len: usize) -> bool {
         start >= self.buffer_offset && start + len <= self.buffer_offset + self.direct_buffer_size
@@ -301,11 +303,12 @@ impl ByteBufferBase for StreamingByteBuffer<'_> {
 mod tests {
     use std::fs::File;
     use std::io::{Read, Write};
+    use std::rc::Rc;
     use std::{fs, mem};
 
     use crate::utils::byte_buffer_base::ByteBufferBase;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
-    use crate::utils::file_loader::LoadFile;
+    use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
     use crate::utils::file_streaming_byte_buffer::{FileStreamingBuffer, StreamingByteBuffer};
     use crate::utils::local_file_loader::LocalFileLoader;
 
@@ -349,10 +352,12 @@ mod tests {
         let path = String::from("src/sample_files/test_file_1");
         create_testing_file(&path);
 
-        let file_loader = LocalFileLoader::new(&path).unwrap();
+        let file_loader = Rc::from(FileLoaderEnum::LocalFileLoader(
+            LocalFileLoader::new(&path).unwrap(),
+        ));
         let file_offset = 4;
         let streaming_buffer = StreamingByteBuffer::from_file(
-            &file_loader,
+            file_loader.clone(),
             file_offset,
             file_loader.get_file_size(),
             DEFAULT_STREAMING_BUFFER_LOADING_SIZE,
@@ -370,10 +375,12 @@ mod tests {
         let path = String::from("src/sample_files/test_file_2");
         create_testing_file(&path);
 
-        let file_loader = LocalFileLoader::new(&path).unwrap();
+        let file_loader = Rc::from(FileLoaderEnum::LocalFileLoader(
+            LocalFileLoader::new(&path).unwrap(),
+        ));
         let file_offset = 4;
         let streaming_buffer = StreamingByteBuffer::from_file(
-            &file_loader,
+            file_loader.clone(),
             file_offset,
             file_loader.get_file_size(),
             DEFAULT_STREAMING_BUFFER_LOADING_SIZE,
@@ -409,10 +416,12 @@ mod tests {
         let path = String::from("src/sample_files/test_file_3");
         create_testing_file(&path);
 
-        let file_loader = LocalFileLoader::new(&path).unwrap();
+        let file_loader = Rc::from(FileLoaderEnum::LocalFileLoader(
+            LocalFileLoader::new(&path).unwrap(),
+        ));
         let file_offset = 4;
         let streaming_buffer = StreamingByteBuffer::from_file(
-            &file_loader,
+            file_loader.clone(),
             file_offset,
             file_loader.get_file_size(),
             DEFAULT_STREAMING_BUFFER_LOADING_SIZE,
@@ -466,10 +475,12 @@ mod tests {
         let path = String::from("src/sample_files/test_file_4");
         create_testing_file(&path);
 
-        let file_loader = LocalFileLoader::new(&path).unwrap();
+        let file_loader = Rc::from(FileLoaderEnum::LocalFileLoader(
+            LocalFileLoader::new(&path).unwrap(),
+        ));
         let file_offset = 4;
         let mut streaming_buffer = StreamingByteBuffer::from_file(
-            &file_loader,
+            file_loader.clone(),
             file_offset,
             file_loader.get_file_size(),
             DEFAULT_STREAMING_BUFFER_LOADING_SIZE,
@@ -616,10 +627,12 @@ mod tests {
         let path = String::from("src/sample_files/test_file_5");
         create_testing_file(&path);
 
-        let file_loader = LocalFileLoader::new(&path).unwrap();
+        let file_loader = Rc::from(FileLoaderEnum::LocalFileLoader(
+            LocalFileLoader::new(&path).unwrap(),
+        ));
         let file_offset = 4;
         let mut streaming_buffer = StreamingByteBuffer::from_file(
-            &file_loader,
+            file_loader.clone(),
             file_offset,
             file_loader.get_file_size(),
             DEFAULT_STREAMING_BUFFER_LOADING_SIZE,
@@ -663,10 +676,12 @@ mod tests {
         let path = String::from("src/sample_files/test_file_6");
         create_testing_file(&path);
 
-        let file_loader = LocalFileLoader::new(&path).unwrap();
+        let file_loader = Rc::from(FileLoaderEnum::LocalFileLoader(
+            LocalFileLoader::new(&path).unwrap(),
+        ));
         let file_offset = 4;
         let mut streaming_buffer = StreamingByteBuffer::from_file(
-            &file_loader,
+            file_loader.clone(),
             file_offset,
             file_loader.get_file_size(),
             5,

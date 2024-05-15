@@ -310,6 +310,7 @@ impl<'a> PlainDataPageReaderFloat32V1<'a> {
 #[cfg(test)]
 mod tests {
     use std::cmp::min;
+    use std::rc::Rc;
 
     use crate::bridge::float32_bridge::Float32Bridge;
     use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
@@ -321,7 +322,7 @@ mod tests {
     use crate::utils::byte_buffer_base::ByteBufferBase;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
-    use crate::utils::file_loader::LoadFile;
+    use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
     use crate::utils::file_streaming_byte_buffer::{FileStreamingBuffer, StreamingByteBuffer};
     use crate::utils::local_file_loader::LocalFileLoader;
     use crate::utils::rep_def_parser::RepDefParser;
@@ -377,8 +378,8 @@ mod tests {
         let path = String::from("src/sample_files/plain_float_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_plain_data_page_float32(&mut buf, None, 100);
@@ -393,8 +394,8 @@ mod tests {
         let path = String::from("src/sample_files/plain_float_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_plain_data_page_float32(&mut buf, None, 100);
@@ -409,8 +410,8 @@ mod tests {
         let path = String::from("src/sample_files/plain_float_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_plain_data_page_float32(&mut buf, None, 100);
@@ -418,7 +419,7 @@ mod tests {
         assert!(res.is_ok());
         let boolean_zero_copy_page_reader = res.unwrap();
 
-        let res = StreamingByteBuffer::from_file(&file, 4, file.get_file_size() - 4, 64);
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4, 64);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_plain_data_page_float32(&mut buf, None, 100);
@@ -437,8 +438,8 @@ mod tests {
         let path = String::from("src/sample_files/plain_float_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_plain_data_page_float32(&mut buf, None, 100);
@@ -446,7 +447,7 @@ mod tests {
         assert!(res.is_ok());
         let boolean_zero_copy_page_reader = res.unwrap();
 
-        let res = StreamingByteBuffer::from_file(&file, 4, file.get_file_size() - 4, 64);
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4, 64);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let res = load_plain_data_page_float32(&mut buf, None, 100);
@@ -465,8 +466,8 @@ mod tests {
         let path = String::from("src/sample_files/plain_float_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
 
@@ -518,8 +519,8 @@ mod tests {
         let path = String::from("src/sample_files/plain_float_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let filter = FloatPointRangeFilter::new(0.0, 54914.0, true, true, true, true, false);
@@ -570,8 +571,8 @@ mod tests {
         let path = String::from("src/sample_files/plain_float_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = StreamingByteBuffer::from_file(&file, 4, file.get_file_size() - 4, 64);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4, 64);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
 
@@ -621,8 +622,8 @@ mod tests {
         let path = String::from("src/sample_files/plain_float_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = StreamingByteBuffer::from_file(&file, 4, file.get_file_size() - 4, 64);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4, 64);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let filter = FloatPointRangeFilter::new(0.0, 54914.0, true, true, true, true, false);
@@ -673,8 +674,8 @@ mod tests {
         let path = String::from("src/sample_files/plain_float_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
 
@@ -726,8 +727,8 @@ mod tests {
         let path = String::from("src/sample_files/plain_float_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let filter = FloatPointRangeFilter::new(0.0, 54914.0, true, true, true, true, false);
@@ -778,8 +779,8 @@ mod tests {
         let path = String::from("src/sample_files/plain_float_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = StreamingByteBuffer::from_file(&file, 4, file.get_file_size() - 4, 64);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4, 64);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
 
@@ -829,8 +830,8 @@ mod tests {
         let path = String::from("src/sample_files/plain_float_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = StreamingByteBuffer::from_file(&file, 4, file.get_file_size() - 4, 64);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4, 64);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let filter = FloatPointRangeFilter::new(0.0, 54914.0, true, true, true, true, false);

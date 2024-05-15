@@ -20,7 +20,7 @@ use byteorder::{ByteOrder, LittleEndian};
 
 use crate::utils::byte_buffer_base::ByteBufferBase;
 use crate::utils::exceptions::BoltReaderError;
-use crate::utils::file_loader::LoadFile;
+use crate::utils::file_loader::FileLoader;
 
 // Currently, we use 1GB as the max capacity.
 // todo: Create config module to handle the default const values.
@@ -149,7 +149,7 @@ impl SharedMemoryBuffer {
     }
 
     pub fn from_file(
-        source: &dyn LoadFile,
+        source: &dyn FileLoader,
         offset: usize,
         length: usize,
     ) -> Result<SharedMemoryBuffer, BoltReaderError> {

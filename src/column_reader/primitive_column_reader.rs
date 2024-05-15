@@ -59,7 +59,7 @@ pub struct PrimitiveColumnReader<'a> {
     max_def: u32,
     column_size: usize,
     column_name: String,
-    buffer: BufferEnum<'a>,
+    buffer: BufferEnum,
     dictionary_page: Option<Rc<DictionaryPageEnum>>,
     current_data_page_header: Option<PageHeader>,
     current_data_page: Option<DataPageEnum<'a>>,
@@ -260,7 +260,7 @@ impl<'a> PrimitiveColumnReader<'a> {
         max_rep: u32,
         max_def: u32,
         column_name: String,
-        buffer: BufferEnum<'a>,
+        buffer: BufferEnum,
         filter: Option<&'a dyn FixedLengthRangeFilter>,
     ) -> Result<PrimitiveColumnReader<'a>, BoltReaderError> {
         Ok(PrimitiveColumnReader {
@@ -621,6 +621,7 @@ impl<'a> PrimitiveColumnReader<'a> {
 #[cfg(test)]
 mod tests {
     use std::cmp::min;
+    use std::rc::Rc;
 
     use rand::{thread_rng, Rng};
 
@@ -636,7 +637,7 @@ mod tests {
     use crate::metadata::parquet_metadata_thrift::FileMetaData;
     use crate::utils::byte_buffer_base::BufferEnum;
     use crate::utils::exceptions::BoltReaderError;
-    use crate::utils::file_loader::LoadFile;
+    use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
     use crate::utils::file_streaming_byte_buffer::{FileStreamingBuffer, StreamingByteBuffer};
     use crate::utils::local_file_loader::LocalFileLoader;
     use crate::utils::row_range_set::{RowRange, RowRangeSet};
@@ -673,18 +674,16 @@ mod tests {
         BufferEnum::DirectByteBuffer(res.unwrap())
     }
 
-    fn load_column_to_streaming_buffer<'a>(
-        file: &'a (dyn LoadFile + 'a),
-        buffer_size: usize,
-    ) -> BufferEnum {
-        let res = StreamingByteBuffer::from_file(file, 4, file.get_file_size() - 4, buffer_size);
+    fn load_column_to_streaming_buffer(file: Rc<FileLoaderEnum>, buffer_size: usize) -> BufferEnum {
+        let res =
+            StreamingByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4, buffer_size);
         assert!(res.is_ok());
         BufferEnum::StreamingByteBuffer(res.unwrap())
     }
 
     fn load_column_reader<'a>(
         path: &'a String,
-        buffer: BufferEnum<'a>,
+        buffer: BufferEnum,
         filter: Option<&'a dyn FixedLengthRangeFilter>,
     ) -> Result<PrimitiveColumnReader<'a>, BoltReaderError> {
         let footer = load_file_metadata(&path);
@@ -713,8 +712,8 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_bigint_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let buffer = load_column_to_streaming_buffer(&file, STEAMING_BUFFER_SIZE);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let buffer = load_column_to_streaming_buffer(file, STEAMING_BUFFER_SIZE);
         let res = load_column_reader(&path, buffer, None);
         assert!(res.is_ok());
         let column_reader = res.unwrap();
@@ -1045,8 +1044,8 @@ mod tests {
             let step = get_random_number_in_range(15);
             let res = LocalFileLoader::new(&path);
             assert!(res.is_ok());
-            let file = res.unwrap();
-            let buffer = load_column_to_streaming_buffer(&file, buffer_size);
+            let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+            let buffer = load_column_to_streaming_buffer(file, buffer_size);
             let res = load_column_reader(&path, buffer, None);
             assert!(res.is_ok());
             let mut column_reader = res.unwrap();
@@ -1082,8 +1081,8 @@ mod tests {
                 let step = get_random_number_in_range(15) + shift;
                 let res = LocalFileLoader::new(&path);
                 assert!(res.is_ok());
-                let file = res.unwrap();
-                let buffer = load_column_to_streaming_buffer(&file, buffer_size);
+                let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+                let buffer = load_column_to_streaming_buffer(file, buffer_size);
                 let res = load_column_reader(&path, buffer, None);
                 assert!(res.is_ok());
                 let mut column_reader = res.unwrap();
@@ -1123,8 +1122,8 @@ mod tests {
             let step = get_random_number_in_range(15);
             let res = LocalFileLoader::new(&path);
             assert!(res.is_ok());
-            let file = res.unwrap();
-            let buffer = load_column_to_streaming_buffer(&file, buffer_size);
+            let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+            let buffer = load_column_to_streaming_buffer(file, buffer_size);
 
             let filter_low = get_random_number_in_range(15) as i128;
             let filter_length = get_random_number_in_range(20) as i128;
@@ -1165,8 +1164,8 @@ mod tests {
                 let step = get_random_number_in_range(15) + shift;
                 let res = LocalFileLoader::new(&path);
                 assert!(res.is_ok());
-                let file = res.unwrap();
-                let buffer = load_column_to_streaming_buffer(&file, buffer_size);
+                let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+                let buffer = load_column_to_streaming_buffer(file, buffer_size);
 
                 let filter_low = get_random_number_in_range(15) as i128;
                 let filter_length = get_random_number_in_range(20) as i128;

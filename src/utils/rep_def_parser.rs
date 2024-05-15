@@ -145,12 +145,13 @@ impl RepDefParser {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
 
     use crate::metadata::page_header::read_page_header;
     use crate::metadata::parquet_metadata_thrift::Encoding;
     use crate::utils::byte_buffer_base::ByteBufferBase;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
-    use crate::utils::file_loader::LoadFile;
+    use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
     use crate::utils::file_streaming_byte_buffer::{FileStreamingBuffer, StreamingByteBuffer};
     use crate::utils::local_file_loader::LocalFileLoader;
     use crate::utils::rep_def_parser::RepDefParser;
@@ -194,8 +195,8 @@ mod tests {
         let path = String::from("src/sample_files/linitem_plain_data_page");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 0, file.get_file_size());
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 0, file.get_file_size());
 
         assert!(res.is_ok());
         let mut buf = res.unwrap();
@@ -235,8 +236,8 @@ mod tests {
         let path = String::from("src/sample_files/linitem_plain_data_page");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = StreamingByteBuffer::from_file(&file, 0, file.get_file_size(), 5);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = StreamingByteBuffer::from_file(file.clone(), 0, file.get_file_size(), 5);
 
         assert!(res.is_ok());
         let mut buf = res.unwrap();
@@ -277,8 +278,8 @@ mod tests {
         let path = String::from("src/sample_files/data_page_with_nulls");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 0, file.get_file_size());
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 0, file.get_file_size());
 
         assert!(res.is_ok());
         let mut buf = res.unwrap();
@@ -336,8 +337,8 @@ mod tests {
         let path = String::from("src/sample_files/data_page_with_nulls");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = StreamingByteBuffer::from_file(&file, 0, file.get_file_size(), 5);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = StreamingByteBuffer::from_file(file.clone(), 0, file.get_file_size(), 5);
 
         assert!(res.is_ok());
         let mut buf = res.unwrap();
