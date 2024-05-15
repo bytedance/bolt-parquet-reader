@@ -24,7 +24,7 @@ use crate::page_reader::data_page_v1::data_page_base::DataPage;
 use crate::page_reader::dictionary_page::dictionary_page_base::{
     DictionaryPageEnum, DictionaryPageNew,
 };
-use crate::utils::byte_buffer_base::ByteBufferBase;
+use crate::utils::byte_buffer_base::{BufferEnum, ByteBufferBase};
 use crate::utils::encoding::rle_bp::RleBpDecoder;
 use crate::utils::exceptions::BoltReaderError;
 use crate::utils::row_range_set::{RowRange, RowRangeSet, RowRangeSetGenerator};
@@ -47,6 +47,8 @@ pub struct RleBpDataPageReaderFloat32V1<'a> {
     nullable_index: usize,
     #[allow(dead_code)]
     bit_width: u8,
+    #[allow(dead_code)]
+    buffer_enum: BufferEnum,
     filter: Option<&'a dyn FixedLengthRangeFilter>,
     validity: Option<Vec<bool>>,
     data: Vec<u32>,
@@ -176,10 +178,18 @@ impl<'a> RleBpDataPageReaderFloat32V1<'a> {
         type_size: usize,
         has_null: bool,
         mut data_size: usize,
+        as_reference: bool,
+        mut buffer_enum: BufferEnum,
         filter: Option<&'a (dyn FixedLengthRangeFilter + 'a)>,
         validity: Option<Vec<bool>>,
         dictionary_page: Rc<DictionaryPageEnum>,
     ) -> Result<RleBpDataPageReaderFloat32V1<'a>, BoltReaderError> {
+        let buffer = if as_reference {
+            buffer
+        } else {
+            &mut buffer_enum
+        };
+
         let header = match &page_header.data_page_header {
             Some(data_page_v1) => data_page_v1,
             None => {
@@ -235,6 +245,7 @@ impl<'a> RleBpDataPageReaderFloat32V1<'a> {
             non_null_index: 0,
             nullable_index: 0,
             bit_width,
+            buffer_enum,
             filter,
             validity,
             data,
@@ -330,7 +341,7 @@ mod tests {
     use crate::page_reader::dictionary_page::dictionary_page_base::DictionaryPageEnum;
     use crate::page_reader::dictionary_page::dictionary_page_float32::DictionaryPageFloat32;
     use crate::page_reader::dictionary_page::dictionary_page_float32_with_filters::DictionaryPageWithFilterFloat32;
-    use crate::utils::byte_buffer_base::ByteBufferBase;
+    use crate::utils::byte_buffer_base::{BufferEnum, ByteBufferBase};
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
     use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
@@ -348,7 +359,13 @@ mod tests {
         let page_header = read_page_header(buf);
         assert!(page_header.is_ok());
         let page_header = page_header.unwrap();
-        let dictionary_page = DictionaryPageFloat32::new(&page_header, buf, mem::size_of::<f32>());
+        let dictionary_page = DictionaryPageFloat32::new(
+            &page_header,
+            buf,
+            mem::size_of::<f32>(),
+            true,
+            BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+        );
         assert!(dictionary_page.is_ok());
         Rc::from(DictionaryPageEnum::DictionaryPageFloat32(
             dictionary_page.unwrap(),
@@ -362,8 +379,14 @@ mod tests {
         let page_header = read_page_header(buf);
         assert!(page_header.is_ok());
         let page_header = page_header.unwrap();
-        let dictionary_page =
-            DictionaryPageWithFilterFloat32::new(&page_header, buf, mem::size_of::<f32>(), filter);
+        let dictionary_page = DictionaryPageWithFilterFloat32::new(
+            &page_header,
+            buf,
+            mem::size_of::<f32>(),
+            true,
+            BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+            filter,
+        );
         assert!(dictionary_page.is_ok());
         Rc::from(DictionaryPageEnum::DictionaryPageWithFilterFloat32(
             dictionary_page.unwrap(),
@@ -409,6 +432,8 @@ mod tests {
             4,
             validity.0,
             data_size as usize,
+            true,
+            BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
             filter,
             validity.1,
             dictionary,

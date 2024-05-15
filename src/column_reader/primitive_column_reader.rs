@@ -21,7 +21,9 @@ use crate::bridge::result_bridge::ResultBridge;
 use crate::column_reader::column_reader_base::{ColumnReader, PhysicalDataType};
 use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
 use crate::metadata::page_header::read_page_header;
-use crate::metadata::parquet_metadata_thrift::{ColumnMetaData, Encoding, PageHeader, Type};
+use crate::metadata::parquet_metadata_thrift::{
+    ColumnMetaData, CompressionCodec, Encoding, PageHeader, Type,
+};
 use crate::page_reader::data_page_v1::boolean_data_page_v1::BooleanDataPageReaderV1;
 use crate::page_reader::data_page_v1::data_page_base::{
     get_data_page_covered_range, get_data_page_remaining_range, DataPage, DataPageEnum,
@@ -44,6 +46,8 @@ use crate::page_reader::dictionary_page::dictionary_page_int32_with_filters::Dic
 use crate::page_reader::dictionary_page::dictionary_page_int64::DictionaryPageInt64;
 use crate::page_reader::dictionary_page::dictionary_page_int64_with_filters::DictionaryPageWithFilterInt64;
 use crate::utils::byte_buffer_base::{BufferEnum, ByteBufferBase};
+use crate::utils::decompressor::{Decompress, DecompressorEnum, GzipDecompressor};
+use crate::utils::direct_byte_buffer::DirectByteBuffer;
 use crate::utils::exceptions::BoltReaderError;
 use crate::utils::rep_def_parser::RepDefParser;
 use crate::utils::row_range_set::{RowRange, RowRangeSet};
@@ -57,6 +61,7 @@ pub struct PrimitiveColumnReader<'a> {
     type_size: usize,
     max_rep: u32,
     max_def: u32,
+    compression_codec: CompressionCodec,
     column_size: usize,
     column_name: String,
     buffer: BufferEnum,
@@ -272,6 +277,7 @@ impl<'a> PrimitiveColumnReader<'a> {
             type_size: 0,
             max_rep,
             max_def,
+            compression_codec: CompressionCodec::UNCOMPRESSED,
             column_size: 0,
             column_name,
             buffer,
@@ -282,12 +288,231 @@ impl<'a> PrimitiveColumnReader<'a> {
         })
     }
 
+    pub fn decompress_data(
+        compression_codec: CompressionCodec,
+        buffer: &mut dyn ByteBufferBase,
+        compressed_size: usize,
+    ) -> Result<BufferEnum, BoltReaderError> {
+        let decompressor = match compression_codec {
+            CompressionCodec::GZIP => {
+                DecompressorEnum::GzipDecompressor(GzipDecompressor::default())
+            }
+            _ => {
+                return Err(BoltReaderError::FixedLengthColumnReaderError(String::from(
+                    "Not supported compression type",
+                )))
+            }
+        };
+
+        decompressor.decompress(buffer, compressed_size)
+    }
+
+    pub fn load_uncompressed_dictionary_page(
+        &mut self,
+        first_page_header: &PageHeader,
+    ) -> Result<(), BoltReaderError> {
+        self.dictionary_page = match self.physical_data_type {
+            PhysicalDataType::Int32 => match self.filter {
+                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageInt32(
+                    DictionaryPageInt32::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        4,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                    )?,
+                ))),
+                Some(filter) => Some(Rc::from(DictionaryPageEnum::DictionaryPageWithFilterInt32(
+                    DictionaryPageWithFilterInt32::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        4,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                        filter,
+                    )?,
+                ))),
+            },
+            PhysicalDataType::Int64 => match self.filter {
+                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageInt64(
+                    DictionaryPageInt64::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        8,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                    )?,
+                ))),
+                Some(filter) => Some(Rc::from(DictionaryPageEnum::DictionaryPageWithFilterInt64(
+                    DictionaryPageWithFilterInt64::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        8,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                        filter,
+                    )?,
+                ))),
+            },
+            PhysicalDataType::Float32 => match self.filter {
+                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageFloat32(
+                    DictionaryPageFloat32::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        4,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                    )?,
+                ))),
+                Some(filter) => Some(Rc::from(
+                    DictionaryPageEnum::DictionaryPageWithFilterFloat32(
+                        DictionaryPageWithFilterFloat32::new(
+                            first_page_header,
+                            &mut self.buffer,
+                            4,
+                            true,
+                            BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                            filter,
+                        )?,
+                    ),
+                )),
+            },
+            PhysicalDataType::Float64 => match self.filter {
+                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageFloat64(
+                    DictionaryPageFloat64::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        8,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                    )?,
+                ))),
+                Some(filter) => Some(Rc::from(
+                    DictionaryPageEnum::DictionaryPageWithFilterFloat64(
+                        DictionaryPageWithFilterFloat64::new(
+                            first_page_header,
+                            &mut self.buffer,
+                            8,
+                            true,
+                            BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                            filter,
+                        )?,
+                    ),
+                )),
+            },
+            _ => None,
+        };
+
+        Ok(())
+    }
+
+    pub fn load_compressed_dictionary_page(
+        &mut self,
+        first_page_header: &PageHeader,
+        decompressed_buffer: BufferEnum,
+    ) -> Result<(), BoltReaderError> {
+        self.dictionary_page = match self.physical_data_type {
+            PhysicalDataType::Int32 => match self.filter {
+                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageInt32(
+                    DictionaryPageInt32::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        4,
+                        false,
+                        decompressed_buffer,
+                    )?,
+                ))),
+                Some(filter) => Some(Rc::from(DictionaryPageEnum::DictionaryPageWithFilterInt32(
+                    DictionaryPageWithFilterInt32::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        4,
+                        false,
+                        decompressed_buffer,
+                        filter,
+                    )?,
+                ))),
+            },
+            PhysicalDataType::Int64 => match self.filter {
+                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageInt64(
+                    DictionaryPageInt64::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        8,
+                        false,
+                        decompressed_buffer,
+                    )?,
+                ))),
+                Some(filter) => Some(Rc::from(DictionaryPageEnum::DictionaryPageWithFilterInt64(
+                    DictionaryPageWithFilterInt64::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        8,
+                        false,
+                        decompressed_buffer,
+                        filter,
+                    )?,
+                ))),
+            },
+            PhysicalDataType::Float32 => match self.filter {
+                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageFloat32(
+                    DictionaryPageFloat32::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        4,
+                        false,
+                        decompressed_buffer,
+                    )?,
+                ))),
+                Some(filter) => Some(Rc::from(
+                    DictionaryPageEnum::DictionaryPageWithFilterFloat32(
+                        DictionaryPageWithFilterFloat32::new(
+                            first_page_header,
+                            &mut self.buffer,
+                            4,
+                            false,
+                            decompressed_buffer,
+                            filter,
+                        )?,
+                    ),
+                )),
+            },
+            PhysicalDataType::Float64 => match self.filter {
+                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageFloat64(
+                    DictionaryPageFloat64::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        8,
+                        false,
+                        decompressed_buffer,
+                    )?,
+                ))),
+                Some(filter) => Some(Rc::from(
+                    DictionaryPageEnum::DictionaryPageWithFilterFloat64(
+                        DictionaryPageWithFilterFloat64::new(
+                            first_page_header,
+                            &mut self.buffer,
+                            8,
+                            false,
+                            decompressed_buffer,
+                            filter,
+                        )?,
+                    ),
+                )),
+            },
+            _ => None,
+        };
+
+        Ok(())
+    }
+
     pub fn prepare_column_reader(
         &mut self,
         column_meta_data: &ColumnMetaData,
     ) -> Result<(), BoltReaderError> {
         self.num_values = column_meta_data.num_values as usize;
         self.column_size = column_meta_data.total_compressed_size as usize;
+        self.compression_codec = column_meta_data.codec;
 
         self.physical_data_type = match column_meta_data.type_ {
             Type::BOOLEAN => PhysicalDataType::Boolean,
@@ -316,87 +541,36 @@ impl<'a> PrimitiveColumnReader<'a> {
         };
 
         match column_meta_data.dictionary_page_offset {
-            None => None,
+            None => {}
             Some(_) => {
                 let rpos = self.buffer.get_rpos();
                 let first_page_header = read_page_header(&mut self.buffer)?;
                 if first_page_header.dictionary_page_header.is_some() {
-                    self.dictionary_page = match self.physical_data_type {
-                        PhysicalDataType::Int32 => match self.filter {
-                            None => Some(Rc::from(DictionaryPageEnum::DictionaryPageInt32(
-                                DictionaryPageInt32::new(&first_page_header, &mut self.buffer, 4)?,
-                            ))),
-                            Some(filter) => {
-                                Some(Rc::from(DictionaryPageEnum::DictionaryPageWithFilterInt32(
-                                    DictionaryPageWithFilterInt32::new(
-                                        &first_page_header,
-                                        &mut self.buffer,
-                                        4,
-                                        filter,
-                                    )?,
-                                )))
-                            }
-                        },
-                        PhysicalDataType::Int64 => match self.filter {
-                            None => Some(Rc::from(DictionaryPageEnum::DictionaryPageInt64(
-                                DictionaryPageInt64::new(&first_page_header, &mut self.buffer, 8)?,
-                            ))),
-                            Some(filter) => {
-                                Some(Rc::from(DictionaryPageEnum::DictionaryPageWithFilterInt64(
-                                    DictionaryPageWithFilterInt64::new(
-                                        &first_page_header,
-                                        &mut self.buffer,
-                                        8,
-                                        filter,
-                                    )?,
-                                )))
-                            }
-                        },
-                        PhysicalDataType::Float32 => match self.filter {
-                            None => Some(Rc::from(DictionaryPageEnum::DictionaryPageFloat32(
-                                DictionaryPageFloat32::new(
-                                    &first_page_header,
-                                    &mut self.buffer,
-                                    4,
-                                )?,
-                            ))),
-                            Some(filter) => Some(Rc::from(
-                                DictionaryPageEnum::DictionaryPageWithFilterFloat32(
-                                    DictionaryPageWithFilterFloat32::new(
-                                        &first_page_header,
-                                        &mut self.buffer,
-                                        4,
-                                        filter,
-                                    )?,
-                                ),
-                            )),
-                        },
-                        PhysicalDataType::Float64 => match self.filter {
-                            None => Some(Rc::from(DictionaryPageEnum::DictionaryPageFloat64(
-                                DictionaryPageFloat64::new(
-                                    &first_page_header,
-                                    &mut self.buffer,
-                                    8,
-                                )?,
-                            ))),
-                            Some(filter) => Some(Rc::from(
-                                DictionaryPageEnum::DictionaryPageWithFilterFloat64(
-                                    DictionaryPageWithFilterFloat64::new(
-                                        &first_page_header,
-                                        &mut self.buffer,
-                                        8,
-                                        filter,
-                                    )?,
-                                ),
-                            )),
-                        },
+                    match self.compression_codec {
+                        CompressionCodec::UNCOMPRESSED => {
+                            self.load_uncompressed_dictionary_page(&first_page_header)?;
+                        }
+                        _ => {
+                            let decompressed_buffer = Self::decompress_data(
+                                self.compression_codec,
+                                &mut self.buffer,
+                                first_page_header.compressed_page_size as usize,
+                            )?;
 
-                        _ => None,
-                    };
+                            self.load_compressed_dictionary_page(
+                                &first_page_header,
+                                decompressed_buffer,
+                            )?;
+
+                            self.buffer.set_rpos(
+                                self.buffer.get_rpos()
+                                    + first_page_header.compressed_page_size as usize,
+                            );
+                        }
+                    }
                 } else {
                     self.buffer.set_rpos(rpos);
                 }
-                Some(())
             }
         };
 
@@ -411,8 +585,371 @@ impl<'a> PrimitiveColumnReader<'a> {
         Ok(())
     }
 
+    pub fn load_uncompressed_data_page(
+        &mut self,
+        page_header: &PageHeader,
+        rep_rle_bp: bool,
+        def_rle_bp: bool,
+    ) -> Result<(), BoltReaderError> {
+        let data_page_header = page_header.data_page_header.as_ref().unwrap();
+        let rpos = self.buffer.get_rpos();
+        let validity = RepDefParser::parse_rep_def(
+            &mut self.buffer,
+            data_page_header.num_values as usize,
+            self.max_rep,
+            rep_rle_bp,
+            self.max_def,
+            def_rle_bp,
+        )?;
+
+        let data_size = page_header.uncompressed_page_size - (self.buffer.get_rpos() - rpos) as i32;
+
+        match &page_header.data_page_header {
+            Some(data_page_v1) => data_page_v1,
+            None => {
+                return Err(BoltReaderError::FixedLengthDataPageError(String::from(
+                    "Error when reading Data Page V1 Header",
+                )))
+            }
+        };
+
+        let is_dictionary_encoded = (page_header.data_page_header.as_ref().unwrap().encoding
+            == Encoding::PLAIN_DICTIONARY)
+            || (page_header.data_page_header.as_ref().unwrap().encoding
+                == Encoding::RLE_DICTIONARY);
+
+        if self.dictionary_page.is_some() && is_dictionary_encoded {
+            self.current_data_page = match self.physical_data_type {
+                PhysicalDataType::Boolean => None,
+
+                PhysicalDataType::Int32 => Some(DataPageEnum::RleBpDataPageReaderInt32V1(
+                    RleBpDataPageReaderInt32V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                        self.filter,
+                        validity.1,
+                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
+                    )?,
+                )),
+                PhysicalDataType::Int64 => Some(DataPageEnum::RleBpDataPageReaderInt64V1(
+                    RleBpDataPageReaderInt64V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                        self.filter,
+                        validity.1,
+                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
+                    )?,
+                )),
+                PhysicalDataType::Float32 => Some(DataPageEnum::RleBpDataPageReaderFloat32V1(
+                    RleBpDataPageReaderFloat32V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                        self.filter,
+                        validity.1,
+                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
+                    )?,
+                )),
+                PhysicalDataType::Float64 => Some(DataPageEnum::RleBpDataPageReaderFloat64V1(
+                    RleBpDataPageReaderFloat64V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                        self.filter,
+                        validity.1,
+                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
+                    )?,
+                )),
+                PhysicalDataType::None => None,
+            };
+        } else {
+            self.current_data_page = match self.physical_data_type {
+                PhysicalDataType::Boolean => Some(DataPageEnum::BooleanDataPageReaderV1(
+                    BooleanDataPageReaderV1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                        self.filter,
+                        validity.1,
+                    )?,
+                )),
+
+                PhysicalDataType::Int32 => Some(DataPageEnum::PlainDataPageReaderInt32V1(
+                    PlainDataPageReaderInt32V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                        self.filter,
+                        validity.1,
+                    )?,
+                )),
+                PhysicalDataType::Int64 => Some(DataPageEnum::PlainDataPageReaderInt64V1(
+                    PlainDataPageReaderInt64V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                        self.filter,
+                        validity.1,
+                    )?,
+                )),
+                PhysicalDataType::Float32 => Some(DataPageEnum::PlainDataPageReaderFloat32V1(
+                    PlainDataPageReaderFloat32V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                        self.filter,
+                        validity.1,
+                    )?,
+                )),
+                PhysicalDataType::Float64 => Some(DataPageEnum::PlainDataPageReaderFloat64V1(
+                    PlainDataPageReaderFloat64V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        true,
+                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                        self.filter,
+                        validity.1,
+                    )?,
+                )),
+                PhysicalDataType::None => None,
+            };
+        }
+
+        // For uncompressed conditions, we move the index back for zero copy.
+        self.buffer.set_rpos(rpos);
+
+        Ok(())
+    }
+
+    pub fn load_compressed_data_page(
+        &mut self,
+        mut decompressed_buffer: BufferEnum,
+        page_header: &PageHeader,
+        rep_rle_bp: bool,
+        def_rle_bp: bool,
+    ) -> Result<(), BoltReaderError> {
+        let buffer = &mut decompressed_buffer;
+        let data_page_header = page_header.data_page_header.as_ref().unwrap();
+        let rpos = buffer.get_rpos();
+        let validity = RepDefParser::parse_rep_def(
+            buffer,
+            data_page_header.num_values as usize,
+            self.max_rep,
+            rep_rle_bp,
+            self.max_def,
+            def_rle_bp,
+        )?;
+
+        let data_size = page_header.uncompressed_page_size - (buffer.get_rpos() - rpos) as i32;
+
+        match &page_header.data_page_header {
+            Some(data_page_v1) => data_page_v1,
+            None => {
+                return Err(BoltReaderError::FixedLengthDataPageError(String::from(
+                    "Error when reading Data Page V1 Header",
+                )))
+            }
+        };
+
+        let is_dictionary_encoded = (page_header.data_page_header.as_ref().unwrap().encoding
+            == Encoding::PLAIN_DICTIONARY)
+            || (page_header.data_page_header.as_ref().unwrap().encoding
+                == Encoding::RLE_DICTIONARY);
+
+        if self.dictionary_page.is_some() && is_dictionary_encoded {
+            self.current_data_page = match self.physical_data_type {
+                PhysicalDataType::Boolean => None,
+
+                PhysicalDataType::Int32 => Some(DataPageEnum::RleBpDataPageReaderInt32V1(
+                    RleBpDataPageReaderInt32V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        false,
+                        decompressed_buffer,
+                        self.filter,
+                        validity.1,
+                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
+                    )?,
+                )),
+                PhysicalDataType::Int64 => Some(DataPageEnum::RleBpDataPageReaderInt64V1(
+                    RleBpDataPageReaderInt64V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        false,
+                        decompressed_buffer,
+                        self.filter,
+                        validity.1,
+                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
+                    )?,
+                )),
+                PhysicalDataType::Float32 => Some(DataPageEnum::RleBpDataPageReaderFloat32V1(
+                    RleBpDataPageReaderFloat32V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        false,
+                        decompressed_buffer,
+                        self.filter,
+                        validity.1,
+                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
+                    )?,
+                )),
+                PhysicalDataType::Float64 => Some(DataPageEnum::RleBpDataPageReaderFloat64V1(
+                    RleBpDataPageReaderFloat64V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        false,
+                        decompressed_buffer,
+                        self.filter,
+                        validity.1,
+                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
+                    )?,
+                )),
+                PhysicalDataType::None => None,
+            };
+        } else {
+            self.current_data_page = match self.physical_data_type {
+                PhysicalDataType::Boolean => Some(DataPageEnum::BooleanDataPageReaderV1(
+                    BooleanDataPageReaderV1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        false,
+                        decompressed_buffer,
+                        self.filter,
+                        validity.1,
+                    )?,
+                )),
+
+                PhysicalDataType::Int32 => Some(DataPageEnum::PlainDataPageReaderInt32V1(
+                    PlainDataPageReaderInt32V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        false,
+                        decompressed_buffer,
+                        self.filter,
+                        validity.1,
+                    )?,
+                )),
+                PhysicalDataType::Int64 => Some(DataPageEnum::PlainDataPageReaderInt64V1(
+                    PlainDataPageReaderInt64V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        false,
+                        decompressed_buffer,
+                        self.filter,
+                        validity.1,
+                    )?,
+                )),
+                PhysicalDataType::Float32 => Some(DataPageEnum::PlainDataPageReaderFloat32V1(
+                    PlainDataPageReaderFloat32V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        false,
+                        decompressed_buffer,
+                        self.filter,
+                        validity.1,
+                    )?,
+                )),
+                PhysicalDataType::Float64 => Some(DataPageEnum::PlainDataPageReaderFloat64V1(
+                    PlainDataPageReaderFloat64V1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        false,
+                        decompressed_buffer,
+                        self.filter,
+                        validity.1,
+                    )?,
+                )),
+                PhysicalDataType::None => None,
+            };
+        }
+
+        Ok(())
+    }
+
     pub fn load_data_page(&mut self) -> Result<(), BoltReaderError> {
-        let page_header = self.current_data_page_header.as_ref().unwrap();
+        let page_header = self.current_data_page_header.clone().unwrap();
         let data_page_header = page_header.data_page_header.as_ref().unwrap();
 
         let rep_rle_bp = data_page_header.repetition_level_encoding == Encoding::RLE
@@ -421,167 +958,24 @@ impl<'a> PrimitiveColumnReader<'a> {
         let def_rle_bp = data_page_header.definition_level_encoding == Encoding::RLE
             || data_page_header.definition_level_encoding == Encoding::BIT_PACKED;
 
-        // TODO: Add decompression support
-        if page_header.crc.is_none() {
-            // Uncompressed
-            let rpos = self.buffer.get_rpos();
-            let validity = RepDefParser::parse_rep_def(
-                &mut self.buffer,
-                data_page_header.num_values as usize,
-                self.max_rep,
-                rep_rle_bp,
-                self.max_def,
-                def_rle_bp,
-            )?;
-
-            let data_size =
-                page_header.uncompressed_page_size - (self.buffer.get_rpos() - rpos) as i32;
-
-            match &page_header.data_page_header {
-                Some(data_page_v1) => data_page_v1,
-                None => {
-                    return Err(BoltReaderError::FixedLengthDataPageError(String::from(
-                        "Error when reading Data Page V1 Header",
-                    )))
-                }
-            };
-
-            let is_dictionary_encoded = (page_header.data_page_header.as_ref().unwrap().encoding
-                == Encoding::PLAIN_DICTIONARY)
-                || (page_header.data_page_header.as_ref().unwrap().encoding
-                    == Encoding::RLE_DICTIONARY);
-
-            if self.dictionary_page.is_some() && is_dictionary_encoded {
-                self.current_data_page = match self.physical_data_type {
-                    PhysicalDataType::Boolean => None,
-
-                    PhysicalDataType::Int32 => Some(DataPageEnum::RleBpDataPageReaderInt32V1(
-                        RleBpDataPageReaderInt32V1::new(
-                            page_header,
-                            &mut self.buffer,
-                            self.data_page_offset,
-                            self.type_size,
-                            validity.0,
-                            data_size as usize,
-                            self.filter,
-                            validity.1,
-                            Rc::clone(self.dictionary_page.as_ref().unwrap()),
-                        )?,
-                    )),
-                    PhysicalDataType::Int64 => Some(DataPageEnum::RleBpDataPageReaderInt64V1(
-                        RleBpDataPageReaderInt64V1::new(
-                            page_header,
-                            &mut self.buffer,
-                            self.data_page_offset,
-                            self.type_size,
-                            validity.0,
-                            data_size as usize,
-                            self.filter,
-                            validity.1,
-                            Rc::clone(self.dictionary_page.as_ref().unwrap()),
-                        )?,
-                    )),
-                    PhysicalDataType::Float32 => Some(DataPageEnum::RleBpDataPageReaderFloat32V1(
-                        RleBpDataPageReaderFloat32V1::new(
-                            page_header,
-                            &mut self.buffer,
-                            self.data_page_offset,
-                            self.type_size,
-                            validity.0,
-                            data_size as usize,
-                            self.filter,
-                            validity.1,
-                            Rc::clone(self.dictionary_page.as_ref().unwrap()),
-                        )?,
-                    )),
-                    PhysicalDataType::Float64 => Some(DataPageEnum::RleBpDataPageReaderFloat64V1(
-                        RleBpDataPageReaderFloat64V1::new(
-                            page_header,
-                            &mut self.buffer,
-                            self.data_page_offset,
-                            self.type_size,
-                            validity.0,
-                            data_size as usize,
-                            self.filter,
-                            validity.1,
-                            Rc::clone(self.dictionary_page.as_ref().unwrap()),
-                        )?,
-                    )),
-                    PhysicalDataType::None => None,
-                };
-            } else {
-                self.current_data_page = match self.physical_data_type {
-                    PhysicalDataType::Boolean => Some(DataPageEnum::BooleanDataPageReaderV1(
-                        BooleanDataPageReaderV1::new(
-                            page_header,
-                            &mut self.buffer,
-                            self.data_page_offset,
-                            self.type_size,
-                            validity.0,
-                            data_size as usize,
-                            self.filter,
-                            validity.1,
-                        )?,
-                    )),
-
-                    PhysicalDataType::Int32 => Some(DataPageEnum::PlainDataPageReaderInt32V1(
-                        PlainDataPageReaderInt32V1::new(
-                            page_header,
-                            &mut self.buffer,
-                            self.data_page_offset,
-                            self.type_size,
-                            validity.0,
-                            data_size as usize,
-                            self.filter,
-                            validity.1,
-                        )?,
-                    )),
-                    PhysicalDataType::Int64 => Some(DataPageEnum::PlainDataPageReaderInt64V1(
-                        PlainDataPageReaderInt64V1::new(
-                            page_header,
-                            &mut self.buffer,
-                            self.data_page_offset,
-                            self.type_size,
-                            validity.0,
-                            data_size as usize,
-                            self.filter,
-                            validity.1,
-                        )?,
-                    )),
-                    PhysicalDataType::Float32 => Some(DataPageEnum::PlainDataPageReaderFloat32V1(
-                        PlainDataPageReaderFloat32V1::new(
-                            page_header,
-                            &mut self.buffer,
-                            self.data_page_offset,
-                            self.type_size,
-                            validity.0,
-                            data_size as usize,
-                            self.filter,
-                            validity.1,
-                        )?,
-                    )),
-                    PhysicalDataType::Float64 => Some(DataPageEnum::PlainDataPageReaderFloat64V1(
-                        PlainDataPageReaderFloat64V1::new(
-                            page_header,
-                            &mut self.buffer,
-                            self.data_page_offset,
-                            self.type_size,
-                            validity.0,
-                            data_size as usize,
-                            self.filter,
-                            validity.1,
-                        )?,
-                    )),
-                    PhysicalDataType::None => None,
-                };
+        match self.compression_codec {
+            CompressionCodec::UNCOMPRESSED => {
+                self.load_uncompressed_data_page(&page_header, rep_rle_bp, def_rle_bp)?;
             }
+            _ => {
+                let decompressed_buffer = Self::decompress_data(
+                    self.compression_codec,
+                    &mut self.buffer,
+                    page_header.compressed_page_size as usize,
+                )?;
 
-            // For uncompressed conditions, we move the index back for zero copy.
-            self.buffer.set_rpos(rpos);
-        } else {
-            return Err(BoltReaderError::NotYetImplementedError(String::from(
-                "Decompression not yet implemented",
-            )));
+                self.load_compressed_data_page(
+                    decompressed_buffer,
+                    &page_header,
+                    rep_rle_bp,
+                    def_rle_bp,
+                )?;
+            }
         }
 
         Ok(())

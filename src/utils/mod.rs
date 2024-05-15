@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod byte_buffer_base;
+pub mod decompressor;
 pub mod direct_byte_buffer;
 pub mod encoding;
 pub mod exceptions;

@@ -540,6 +540,39 @@ mod tests {
     }
 
     #[test]
+    fn test_plain_row_group_reader_without_filter_gzip() {
+        let path = String::from("src/sample_files/plain_row_group_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), None);
+            columns_to_read.insert(String::from(INT32_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_plain_non_null_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_plain_row_group_reader_with_one_filter() {
         let path = String::from("src/sample_files/plain_row_group.parquet");
         let base_step = 1000;
@@ -575,8 +608,79 @@ mod tests {
     }
 
     #[test]
+    fn test_plain_row_group_reader_with_one_filter_gzip() {
+        let path = String::from("src/sample_files/plain_row_group_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_plain_non_null_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_plain_row_group_reader_with_two_filters() {
         let path = String::from("src/sample_files/plain_row_group.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_plain_non_null_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
+    fn test_plain_row_group_reader_with_two_filters_gzip() {
+        let path = String::from("src/sample_files/plain_row_group_gzip.parquet");
         let base_step = 1000;
 
         for i in 0..3 {
@@ -649,8 +753,85 @@ mod tests {
     }
 
     #[test]
+    fn test_plain_row_group_reader_with_three_filters_gzip() {
+        let path = String::from("src/sample_files/plain_row_group_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+            let float_filter =
+                FloatPointRangeFilter::new(200.0, 800000.0, true, true, false, false, false);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_plain_non_null_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_plain_row_group_reader_with_four_filters() {
         let path = String::from("src/sample_files/plain_row_group.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+            let float_filter =
+                FloatPointRangeFilter::new(200.0, 800000.0, true, true, false, false, false);
+            let bigint_filter = IntegerRangeFilter::new(300, 700000, true);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
+            columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_plain_non_null_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
+    fn test_plain_row_group_reader_with_four_filters_gzip() {
+        let path = String::from("src/sample_files/plain_row_group_gzip.parquet");
         let base_step = 1000;
 
         for i in 0..3 {
@@ -729,8 +910,82 @@ mod tests {
     }
 
     #[test]
+    fn test_plain_row_group_reader_with_five_filters_gzip() {
+        let path = String::from("src/sample_files/plain_row_group_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+            let float_filter =
+                FloatPointRangeFilter::new(200.0, 800000.0, true, true, false, false, false);
+            let bigint_filter = IntegerRangeFilter::new(300, 700000, true);
+            let double_filter =
+                FloatPointRangeFilter::new(400.0, 600000.0, true, true, false, false, false);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
+            columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), Some(&double_filter));
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_plain_non_null_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_plain_row_group_reader_without_filter_with_nulls() {
         let path = String::from("src/sample_files/plain_row_group_with_nulls.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), None);
+            columns_to_read.insert(String::from(INT32_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_plain_nullable_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
+    fn test_plain_row_group_reader_without_filter_with_nulls_gzip() {
+        let path = String::from("src/sample_files/plain_row_group_with_nulls_gzip.parquet");
         let base_step = 1000;
 
         for i in 0..3 {
@@ -797,8 +1052,79 @@ mod tests {
     }
 
     #[test]
+    fn test_plain_row_group_reader_with_one_filter_with_nulls_gzip() {
+        let path = String::from("src/sample_files/plain_row_group_with_nulls_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_plain_nullable_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_plain_row_group_reader_with_two_filters_with_nulls() {
         let path = String::from("src/sample_files/plain_row_group_with_nulls.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_plain_nullable_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
+    fn test_plain_row_group_reader_with_two_filters_with_nulls_gzip() {
+        let path = String::from("src/sample_files/plain_row_group_with_nulls_gzip.parquet");
         let base_step = 1000;
 
         for i in 0..3 {
@@ -871,8 +1197,85 @@ mod tests {
     }
 
     #[test]
+    fn test_plain_row_group_reader_with_three_filters_with_nulls_gzip() {
+        let path = String::from("src/sample_files/plain_row_group_with_nulls_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+            let float_filter =
+                FloatPointRangeFilter::new(200.0, 800000.0, true, true, false, false, false);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_plain_nullable_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_plain_row_group_reader_with_four_filters_with_nulls() {
         let path = String::from("src/sample_files/plain_row_group_with_nulls.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+            let float_filter =
+                FloatPointRangeFilter::new(200.0, 800000.0, true, true, false, false, false);
+            let bigint_filter = IntegerRangeFilter::new(300, 700000, true);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
+            columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_plain_nullable_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
+    fn test_plain_row_group_reader_with_four_filters_with_nulls_gzip() {
+        let path = String::from("src/sample_files/plain_row_group_with_nulls_gzip.parquet");
         let base_step = 1000;
 
         for i in 0..3 {
@@ -951,8 +1354,82 @@ mod tests {
     }
 
     #[test]
+    fn test_plain_row_group_reader_with_five_filters_with_nulls_gzip() {
+        let path = String::from("src/sample_files/plain_row_group_with_nulls_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+            let float_filter =
+                FloatPointRangeFilter::new(200.0, 800000.0, true, true, false, false, false);
+            let bigint_filter = IntegerRangeFilter::new(300, 700000, true);
+            let double_filter =
+                FloatPointRangeFilter::new(400.0, 600000.0, true, true, false, false, false);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
+            columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), Some(&double_filter));
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_plain_nullable_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_rle_bp_row_group_reader_without_filter() {
         let path = String::from("src/sample_files/rle_bp_row_group.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), None);
+            columns_to_read.insert(String::from(INT32_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_rle_bp_non_null_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
+    fn test_rle_bp_row_group_reader_without_filter_gzip() {
+        let path = String::from("src/sample_files/rle_bp_row_group_gzip.parquet");
         let base_step = 1000;
 
         for i in 0..3 {
@@ -1019,8 +1496,79 @@ mod tests {
     }
 
     #[test]
+    fn test_rle_bp_row_group_reader_with_one_filter_gzip() {
+        let path = String::from("src/sample_files/rle_bp_row_group_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_rle_bp_non_null_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_rle_bp_row_group_reader_with_two_filters() {
         let path = String::from("src/sample_files/rle_bp_row_group.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_rle_bp_non_null_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
+    fn test_rle_bp_row_group_reader_with_two_filters_gzip() {
+        let path = String::from("src/sample_files/rle_bp_row_group_gzip.parquet");
         let base_step = 1000;
 
         for i in 0..3 {
@@ -1093,8 +1641,85 @@ mod tests {
     }
 
     #[test]
+    fn test_rle_bp_row_group_reader_with_three_filters_gzip() {
+        let path = String::from("src/sample_files/rle_bp_row_group_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+            let float_filter =
+                FloatPointRangeFilter::new(200.0, 800000.0, true, true, false, false, false);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_rle_bp_non_null_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_rle_bp_row_group_reader_with_four_filters() {
         let path = String::from("src/sample_files/rle_bp_row_group.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+            let float_filter =
+                FloatPointRangeFilter::new(200.0, 800000.0, true, true, false, false, false);
+            let bigint_filter = IntegerRangeFilter::new(300, 700000, true);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
+            columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_rle_bp_non_null_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
+    fn test_rle_bp_row_group_reader_with_four_filters_gzip() {
+        let path = String::from("src/sample_files/rle_bp_row_group_gzip.parquet");
         let base_step = 1000;
 
         for i in 0..3 {
@@ -1173,6 +1798,47 @@ mod tests {
     }
 
     #[test]
+    fn test_rle_bp_row_group_reader_with_five_filters_gzip() {
+        let path = String::from("src/sample_files/rle_bp_row_group_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+            let float_filter =
+                FloatPointRangeFilter::new(200.0, 800000.0, true, true, false, false, false);
+            let bigint_filter = IntegerRangeFilter::new(300, 700000, true);
+            let double_filter =
+                FloatPointRangeFilter::new(400.0, 600000.0, true, true, false, false, false);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
+            columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), Some(&double_filter));
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_rle_bp_non_null_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_rle_bp_row_group_reader_without_filter_with_nulls() {
         let path = String::from("src/sample_files/rle_bp_row_group_with_nulls.parquet");
         let base_step = 1000;
@@ -1206,8 +1872,76 @@ mod tests {
     }
 
     #[test]
+    fn test_rle_bp_row_group_reader_without_filter_with_nulls_gzip() {
+        let path = String::from("src/sample_files/rle_bp_row_group_with_nulls_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), None);
+            columns_to_read.insert(String::from(INT32_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_rle_bp_nullable_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_rle_bp_row_group_reader_with_one_filter_with_nulls() {
         let path = String::from("src/sample_files/rle_bp_row_group_with_nulls.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_rle_bp_nullable_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
+    fn test_rle_bp_row_group_reader_with_one_filter_with_nulls_gzip() {
+        let path = String::from("src/sample_files/rle_bp_row_group_with_nulls_gzip.parquet");
         let base_step = 1000;
 
         for i in 0..3 {
@@ -1277,8 +2011,82 @@ mod tests {
     }
 
     #[test]
+    fn test_rle_bp_row_group_reader_with_two_filters_with_nulls_gzip() {
+        let path = String::from("src/sample_files/rle_bp_row_group_with_nulls_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_rle_bp_nullable_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_rle_bp_row_group_reader_with_three_filters_with_nulls() {
         let path = String::from("src/sample_files/rle_bp_row_group_with_nulls.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+            let float_filter =
+                FloatPointRangeFilter::new(200.0, 800000.0, true, true, false, false, false);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_rle_bp_nullable_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
+    fn test_rle_bp_row_group_reader_with_three_filters_with_nulls_gzip() {
+        let path = String::from("src/sample_files/rle_bp_row_group_with_nulls_gzip.parquet");
         let base_step = 1000;
 
         for i in 0..3 {
@@ -1354,8 +2162,88 @@ mod tests {
     }
 
     #[test]
+    fn test_rle_bp_row_group_reader_with_four_filters_with_nulls_gzip() {
+        let path = String::from("src/sample_files/rle_bp_row_group_with_nulls_gzip.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+            let float_filter =
+                FloatPointRangeFilter::new(200.0, 800000.0, true, true, false, false, false);
+            let bigint_filter = IntegerRangeFilter::new(300, 700000, true);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
+            columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_rle_bp_nullable_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
     fn test_rle_bp_row_group_reader_with_five_filters_with_nulls() {
         let path = String::from("src/sample_files/rle_bp_row_group_with_nulls.parquet");
+        let base_step = 1000;
+
+        for i in 0..3 {
+            let step = base_step * (1 << i);
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+
+            let boolean_filter = BooleanFilter::new(true, false);
+            let int_filter = IntegerRangeFilter::new(100, 900000, true);
+            let float_filter =
+                FloatPointRangeFilter::new(200.0, 800000.0, true, true, false, false, false);
+            let bigint_filter = IntegerRangeFilter::new(300, 700000, true);
+            let double_filter =
+                FloatPointRangeFilter::new(400.0, 600000.0, true, true, false, false, false);
+
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), Some(&boolean_filter));
+            columns_to_read.insert(String::from(INT32_COLUMN), Some(&int_filter));
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
+            columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), Some(&double_filter));
+
+            let res = load_row_group_reader(&path, &columns_to_read);
+            assert!(res.is_ok());
+            let mut row_group_reader = res.unwrap();
+
+            let mut finished = false;
+            while !finished {
+                let res = row_group_reader.read(step);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                let result = res.0;
+                let row_range_set = res.1;
+                finished = res.2;
+                verify_rle_bp_nullable_results(&columns_to_read, &result, row_range_set);
+            }
+        }
+    }
+
+    #[test]
+    fn test_rle_bp_row_group_reader_with_five_filters_with_nulls_gzip() {
+        let path = String::from("src/sample_files/rle_bp_row_group_with_nulls_gzip.parquet");
         let base_step = 1000;
 
         for i in 0..3 {
