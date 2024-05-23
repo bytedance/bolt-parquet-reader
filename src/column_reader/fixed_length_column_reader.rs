@@ -430,6 +430,33 @@ mod tests {
         FixedLengthColumnReader::new(column_meta_data, 8, 0, 1, buffer, filter)
     }
 
+    fn verify_nullable_double_column_results(
+        result_row_range_set: &RowRangeSet,
+        raw_bridge: &RawBridge<f64>,
+    ) {
+        let offset = result_row_range_set.get_offset();
+        for row_range in result_row_range_set.get_row_ranges() {
+            for i in row_range.begin..row_range.end {
+                if i % 5 == 0 || i % 17 == 0 {
+                    assert_eq!(
+                        raw_bridge
+                            .get_validity_and_value(offset, i, &result_row_range_set)
+                            .unwrap()
+                            .0,
+                        false
+                    );
+                } else {
+                    assert_eq!(
+                        raw_bridge
+                            .get_validity_and_value(offset, i, &result_row_range_set)
+                            .unwrap(),
+                        (true, i as f64)
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn test_loading_dictionary_page() {
         let path = String::from("src/sample_files/lineitem_dictionary.parquet");
@@ -874,7 +901,7 @@ mod tests {
                     let mut result_row_range_set = RowRangeSet::new(offset);
                     let mut raw_bridge = RawBridge::new(false, step as usize);
 
-                    let res = column_reader.read(
+                    let res = column_reader.read_with_filter(
                         to_read,
                         offset,
                         &mut result_row_range_set,
@@ -1218,6 +1245,289 @@ mod tests {
         assert!(res.is_ok());
         assert_eq!(result_row_range_set.get_row_ranges().is_empty(), true);
         assert_eq!(raw_bridge.is_empty(), true);
+    }
+
+    #[test]
+    fn test_reading_nullalbe_plain_double_column_from_beginning() {
+        let path = String::from("src/sample_files/plain_double_column_with_nulls.parquet");
+
+        let num_values = 1000000;
+        let num_tests = 10;
+
+        for _num_test in 0..num_tests {
+            let mut begin = 0;
+            let step = get_random_number_in_range(15);
+            let mut buffer = load_column_to_direct_buffer(&path);
+            let column_reader: Result<FixedLengthColumnReader<f64>, _> =
+                load_column_reader(&path, &mut buffer, Option::None);
+            assert!(column_reader.is_ok());
+            let mut column_reader = column_reader.unwrap();
+
+            while begin < num_values {
+                let end = min(begin + step, num_values);
+                let to_read = RowRange::new(begin as usize, end as usize);
+                let offset = 0;
+                let mut result_row_range_set = RowRangeSet::new(offset);
+                let mut raw_bridge = RawBridge::new(false, step as usize);
+
+                let res =
+                    column_reader.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
+                assert!(res.is_ok());
+
+                if !raw_bridge.is_empty() {
+                    verify_nullable_double_column_results(&result_row_range_set, &raw_bridge);
+                }
+                begin = end;
+            }
+        }
+    }
+
+    #[test]
+    fn test_reading_nullalbe_plain_double_column_from_middle() {
+        let path = String::from("src/sample_files/plain_double_column_with_nulls.parquet");
+
+        let num_values = 1000000;
+        let num_tests = 5;
+
+        for num_test in 0..num_tests {
+            let mut begin_base = 1;
+            while begin_base < num_values {
+                let mut begin = begin_base;
+                let step = get_random_number_in_range(15) + num_test;
+                let mut buffer = load_column_to_direct_buffer(&path);
+                let column_reader: Result<FixedLengthColumnReader<f64>, _> =
+                    load_column_reader(&path, &mut buffer, Option::None);
+                assert!(column_reader.is_ok());
+                let mut column_reader = column_reader.unwrap();
+
+                while begin < num_values {
+                    let end = min(begin + step, num_values);
+                    let to_read = RowRange::new(begin as usize, end as usize);
+                    let offset = 0;
+                    let mut result_row_range_set = RowRangeSet::new(offset);
+                    let mut raw_bridge = RawBridge::new(false, step as usize);
+
+                    let res = column_reader.read(
+                        to_read,
+                        offset,
+                        &mut result_row_range_set,
+                        &mut raw_bridge,
+                    );
+                    assert!(res.is_ok());
+
+                    if !raw_bridge.is_empty() {
+                        verify_nullable_double_column_results(&result_row_range_set, &raw_bridge);
+                    }
+
+                    begin = end;
+                }
+                begin_base = begin_base << 1;
+            }
+        }
+    }
+
+    #[test]
+    fn test_reading_non_null_plain_double_column_from_beginning_with_filter() {
+        let path = String::from("src/sample_files/plain_double_column_with_nulls.parquet");
+
+        let num_values = 1000000;
+        let num_tests = 3;
+
+        for _num_test in 0..num_tests {
+            let mut begin = 0;
+            let step = get_random_number_in_range(15);
+            let mut buffer = load_column_to_direct_buffer(&path);
+
+            let filter_low = get_random_number_in_range(15) as i64;
+            let filter_length = get_random_number_in_range(20) as i64;
+            let filter = FloatPointRangeFilter::new(
+                filter_low as f64,
+                (filter_low + filter_length) as f64,
+                true,
+                true,
+                false,
+                false,
+                false,
+            );
+            let column_reader: Result<FixedLengthColumnReader<f64>, _> =
+                load_column_reader(&path, &mut buffer, Option::Some(&filter));
+            assert!(column_reader.is_ok());
+            let mut column_reader = column_reader.unwrap();
+
+            while begin < num_values {
+                let end = min(begin + step, num_values);
+                let to_read = RowRange::new(begin as usize, end as usize);
+                let offset = 0;
+                let mut result_row_range_set = RowRangeSet::new(offset);
+                let mut raw_bridge = RawBridge::new(false, step as usize);
+
+                let res = column_reader.read_with_filter(
+                    to_read,
+                    offset,
+                    &mut result_row_range_set,
+                    &mut raw_bridge,
+                );
+                assert!(res.is_ok());
+
+                if !raw_bridge.is_empty() {
+                    verify_nullable_double_column_results(&result_row_range_set, &raw_bridge);
+                }
+                begin = end;
+            }
+        }
+    }
+
+    #[test]
+    fn test_reading_nullable_plain_double_column_from_beginning_with_filter() {
+        let path = String::from("src/sample_files/plain_double_column_with_nulls.parquet");
+
+        let num_values = 1000000;
+        let num_tests = 3;
+
+        for _num_test in 0..num_tests {
+            let mut begin = 0;
+            let step = get_random_number_in_range(15);
+            let mut buffer = load_column_to_direct_buffer(&path);
+
+            let filter_low = get_random_number_in_range(15) as i64;
+            let filter_length = get_random_number_in_range(20) as i64;
+            let filter = FloatPointRangeFilter::new(
+                filter_low as f64,
+                (filter_low + filter_length) as f64,
+                true,
+                true,
+                false,
+                false,
+                true,
+            );
+            let column_reader: Result<FixedLengthColumnReader<f64>, _> =
+                load_column_reader(&path, &mut buffer, Option::Some(&filter));
+            assert!(column_reader.is_ok());
+            let mut column_reader = column_reader.unwrap();
+
+            while begin < num_values {
+                let end = min(begin + step, num_values);
+                let to_read = RowRange::new(begin as usize, end as usize);
+                let offset = 0;
+                let mut result_row_range_set = RowRangeSet::new(offset);
+                let mut raw_bridge = RawBridge::new(false, step as usize);
+
+                let res = column_reader.read_with_filter(
+                    to_read,
+                    offset,
+                    &mut result_row_range_set,
+                    &mut raw_bridge,
+                );
+                assert!(res.is_ok());
+
+                if !raw_bridge.is_empty() {
+                    verify_nullable_double_column_results(&result_row_range_set, &raw_bridge);
+                }
+                begin = end;
+            }
+        }
+    }
+
+    #[test]
+    fn test_reading_non_null_plain_double_column_from_middle_filter() {
+        let path = String::from("src/sample_files/plain_double_column_with_nulls.parquet");
+
+        let num_values = 1000000;
+
+        let mut begin_base = 1;
+        while begin_base < num_values {
+            let mut begin = begin_base;
+            let step = get_random_number_in_range(15);
+            let mut buffer = load_column_to_direct_buffer(&path);
+            let filter_low = get_random_number_in_range(15) as i64;
+            let filter_length = get_random_number_in_range(20) as i64;
+            let filter = FloatPointRangeFilter::new(
+                filter_low as f64,
+                (filter_low + filter_length) as f64,
+                true,
+                true,
+                false,
+                false,
+                false,
+            );
+            let column_reader: Result<FixedLengthColumnReader<f64>, _> =
+                load_column_reader(&path, &mut buffer, Option::Some(&filter));
+            assert!(column_reader.is_ok());
+            let mut column_reader = column_reader.unwrap();
+
+            while begin < num_values {
+                let end = min(begin + step, num_values);
+                let to_read = RowRange::new(begin as usize, end as usize);
+                let offset = 0;
+                let mut result_row_range_set = RowRangeSet::new(offset);
+                let mut raw_bridge = RawBridge::new(false, step as usize);
+
+                let res = column_reader.read_with_filter(
+                    to_read,
+                    offset,
+                    &mut result_row_range_set,
+                    &mut raw_bridge,
+                );
+                assert!(res.is_ok());
+
+                if !raw_bridge.is_empty() {
+                    verify_nullable_double_column_results(&result_row_range_set, &raw_bridge);
+                }
+                begin = end;
+            }
+            begin_base = begin_base << 4;
+        }
+    }
+
+    #[test]
+    fn test_reading_nullable_plain_double_column_from_middle_filter() {
+        let path = String::from("src/sample_files/plain_double_column_with_nulls.parquet");
+
+        let num_values = 1000000;
+
+        let mut begin_base = 1;
+        while begin_base < num_values {
+            let mut begin = begin_base;
+            let step = get_random_number_in_range(15);
+            let mut buffer = load_column_to_direct_buffer(&path);
+            let filter_low = get_random_number_in_range(15) as i64;
+            let filter_length = get_random_number_in_range(20) as i64;
+            let filter = FloatPointRangeFilter::new(
+                filter_low as f64,
+                (filter_low + filter_length) as f64,
+                true,
+                true,
+                false,
+                false,
+                true,
+            );
+            let column_reader: Result<FixedLengthColumnReader<f64>, _> =
+                load_column_reader(&path, &mut buffer, Option::Some(&filter));
+            assert!(column_reader.is_ok());
+            let mut column_reader = column_reader.unwrap();
+
+            while begin < num_values {
+                let end = min(begin + step, num_values);
+                let to_read = RowRange::new(begin as usize, end as usize);
+                let offset = 0;
+                let mut result_row_range_set = RowRangeSet::new(offset);
+                let mut raw_bridge = RawBridge::new(false, step as usize);
+
+                let res = column_reader.read_with_filter(
+                    to_read,
+                    offset,
+                    &mut result_row_range_set,
+                    &mut raw_bridge,
+                );
+                assert!(res.is_ok());
+
+                if !raw_bridge.is_empty() {
+                    verify_nullable_double_column_results(&result_row_range_set, &raw_bridge);
+                }
+                begin = end;
+            }
+            begin_base = begin_base << 4;
+        }
     }
 
     #[test]
