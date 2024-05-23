@@ -17,8 +17,29 @@ use std::intrinsics::unlikely;
 
 use crate::bridge::bridge_base::Bridge;
 use crate::bridge::result_bridge::ResultBridge;
+use crate::page_reader::data_page_v1::boolean_data_page_v1::BooleanDataPageReaderV1;
+use crate::page_reader::data_page_v1::plain_data_page_float32_v1::PlainDataPageReaderFloat32V1;
+use crate::page_reader::data_page_v1::plain_data_page_float64_v1::PlainDataPageReaderFloat64V1;
+use crate::page_reader::data_page_v1::plain_data_page_int32_v1::PlainDataPageReaderInt32V1;
+use crate::page_reader::data_page_v1::plain_data_page_int64_v1::PlainDataPageReaderInt64V1;
+use crate::page_reader::data_page_v1::rle_bp_data_page_float32_v1::RleBpDataPageReaderFloat32V1;
+use crate::page_reader::data_page_v1::rle_bp_data_page_float64_v1::RleBpDataPageReaderFloat64V1;
+use crate::page_reader::data_page_v1::rle_bp_data_page_int32_v1::RleBpDataPageReaderInt32V1;
+use crate::page_reader::data_page_v1::rle_bp_data_page_int64_v1::RleBpDataPageReaderInt64V1;
 use crate::utils::exceptions::BoltReaderError;
 use crate::utils::row_range_set::{RowRange, RowRangeSet};
+
+pub enum DataPageEnum<'a> {
+    BooleanDataPageReaderV1(BooleanDataPageReaderV1<'a>),
+    PlainDataPageReaderInt32V1(PlainDataPageReaderInt32V1<'a>),
+    PlainDataPageReaderInt64V1(PlainDataPageReaderInt64V1<'a>),
+    PlainDataPageReaderFloat32V1(PlainDataPageReaderFloat32V1<'a>),
+    PlainDataPageReaderFloat64V1(PlainDataPageReaderFloat64V1<'a>),
+    RleBpDataPageReaderInt32V1(RleBpDataPageReaderInt32V1<'a>),
+    RleBpDataPageReaderInt64V1(RleBpDataPageReaderInt64V1<'a>),
+    RleBpDataPageReaderFloat32V1(RleBpDataPageReaderFloat32V1<'a>),
+    RleBpDataPageReaderFloat64V1(RleBpDataPageReaderFloat64V1<'a>),
+}
 
 pub trait DataPageNew {
     fn data_page_has_null(&self) -> bool;
@@ -46,6 +67,224 @@ pub trait DataPageNew {
         result_row_range_set: &mut RowRangeSet,
         result_bridge: &mut dyn ResultBridge,
     ) -> Result<bool, BoltReaderError>;
+}
+
+impl<'a> DataPageNew for DataPageEnum<'a> {
+    fn data_page_has_null(&self) -> bool {
+        match self {
+            DataPageEnum::BooleanDataPageReaderV1(page_reader) => page_reader.data_page_has_null(),
+            DataPageEnum::PlainDataPageReaderInt32V1(page_reader) => {
+                page_reader.data_page_has_null()
+            }
+            DataPageEnum::PlainDataPageReaderInt64V1(page_reader) => {
+                page_reader.data_page_has_null()
+            }
+            DataPageEnum::PlainDataPageReaderFloat32V1(page_reader) => {
+                page_reader.data_page_has_null()
+            }
+            DataPageEnum::PlainDataPageReaderFloat64V1(page_reader) => {
+                page_reader.data_page_has_null()
+            }
+            DataPageEnum::RleBpDataPageReaderInt32V1(page_reader) => {
+                page_reader.data_page_has_null()
+            }
+            DataPageEnum::RleBpDataPageReaderInt64V1(page_reader) => {
+                page_reader.data_page_has_null()
+            }
+            DataPageEnum::RleBpDataPageReaderFloat32V1(page_reader) => {
+                page_reader.data_page_has_null()
+            }
+            DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => {
+                page_reader.data_page_has_null()
+            }
+        }
+    }
+
+    fn get_data_page_num_values(&self) -> usize {
+        match self {
+            DataPageEnum::BooleanDataPageReaderV1(page_reader) => {
+                page_reader.get_data_page_num_values()
+            }
+            DataPageEnum::PlainDataPageReaderInt32V1(page_reader) => {
+                page_reader.get_data_page_num_values()
+            }
+            DataPageEnum::PlainDataPageReaderInt64V1(page_reader) => {
+                page_reader.get_data_page_num_values()
+            }
+            DataPageEnum::PlainDataPageReaderFloat32V1(page_reader) => {
+                page_reader.get_data_page_num_values()
+            }
+            DataPageEnum::PlainDataPageReaderFloat64V1(page_reader) => {
+                page_reader.get_data_page_num_values()
+            }
+            DataPageEnum::RleBpDataPageReaderInt32V1(page_reader) => {
+                page_reader.get_data_page_num_values()
+            }
+            DataPageEnum::RleBpDataPageReaderInt64V1(page_reader) => {
+                page_reader.get_data_page_num_values()
+            }
+            DataPageEnum::RleBpDataPageReaderFloat32V1(page_reader) => {
+                page_reader.get_data_page_num_values()
+            }
+            DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => {
+                page_reader.get_data_page_num_values()
+            }
+        }
+    }
+
+    fn get_data_page_offset(&self) -> usize {
+        match self {
+            DataPageEnum::BooleanDataPageReaderV1(page_reader) => {
+                page_reader.get_data_page_offset()
+            }
+            DataPageEnum::PlainDataPageReaderInt32V1(page_reader) => {
+                page_reader.get_data_page_offset()
+            }
+            DataPageEnum::PlainDataPageReaderInt64V1(page_reader) => {
+                page_reader.get_data_page_offset()
+            }
+            DataPageEnum::PlainDataPageReaderFloat32V1(page_reader) => {
+                page_reader.get_data_page_offset()
+            }
+            DataPageEnum::PlainDataPageReaderFloat64V1(page_reader) => {
+                page_reader.get_data_page_offset()
+            }
+            DataPageEnum::RleBpDataPageReaderInt32V1(page_reader) => {
+                page_reader.get_data_page_offset()
+            }
+            DataPageEnum::RleBpDataPageReaderInt64V1(page_reader) => {
+                page_reader.get_data_page_offset()
+            }
+            DataPageEnum::RleBpDataPageReaderFloat32V1(page_reader) => {
+                page_reader.get_data_page_offset()
+            }
+            DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => {
+                page_reader.get_data_page_offset()
+            }
+        }
+    }
+
+    fn get_data_page_type_size(&self) -> usize {
+        match self {
+            DataPageEnum::BooleanDataPageReaderV1(page_reader) => {
+                page_reader.get_data_page_type_size()
+            }
+            DataPageEnum::PlainDataPageReaderInt32V1(page_reader) => {
+                page_reader.get_data_page_type_size()
+            }
+            DataPageEnum::PlainDataPageReaderInt64V1(page_reader) => {
+                page_reader.get_data_page_type_size()
+            }
+            DataPageEnum::PlainDataPageReaderFloat32V1(page_reader) => {
+                page_reader.get_data_page_type_size()
+            }
+            DataPageEnum::PlainDataPageReaderFloat64V1(page_reader) => {
+                page_reader.get_data_page_type_size()
+            }
+            DataPageEnum::RleBpDataPageReaderInt32V1(page_reader) => {
+                page_reader.get_data_page_type_size()
+            }
+            DataPageEnum::RleBpDataPageReaderInt64V1(page_reader) => {
+                page_reader.get_data_page_type_size()
+            }
+            DataPageEnum::RleBpDataPageReaderFloat32V1(page_reader) => {
+                page_reader.get_data_page_type_size()
+            }
+            DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => {
+                page_reader.get_data_page_type_size()
+            }
+        }
+    }
+
+    fn is_zero_copied(&self) -> bool {
+        match self {
+            DataPageEnum::BooleanDataPageReaderV1(page_reader) => page_reader.is_zero_copied(),
+            DataPageEnum::PlainDataPageReaderInt32V1(page_reader) => page_reader.is_zero_copied(),
+            DataPageEnum::PlainDataPageReaderInt64V1(page_reader) => page_reader.is_zero_copied(),
+            DataPageEnum::PlainDataPageReaderFloat32V1(page_reader) => page_reader.is_zero_copied(),
+            DataPageEnum::PlainDataPageReaderFloat64V1(page_reader) => page_reader.is_zero_copied(),
+            DataPageEnum::RleBpDataPageReaderInt32V1(page_reader) => page_reader.is_zero_copied(),
+            DataPageEnum::RleBpDataPageReaderInt64V1(page_reader) => page_reader.is_zero_copied(),
+            DataPageEnum::RleBpDataPageReaderFloat32V1(page_reader) => page_reader.is_zero_copied(),
+            DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => page_reader.is_zero_copied(),
+        }
+    }
+
+    fn read(
+        &mut self,
+        to_read: RowRange,
+        offset: usize,
+        result_row_range_set: &mut RowRangeSet,
+        result_bridge: &mut dyn ResultBridge,
+    ) -> Result<bool, BoltReaderError> {
+        match self {
+            DataPageEnum::BooleanDataPageReaderV1(page_reader) => {
+                page_reader.read(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::PlainDataPageReaderInt32V1(page_reader) => {
+                page_reader.read(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::PlainDataPageReaderInt64V1(page_reader) => {
+                page_reader.read(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::PlainDataPageReaderFloat32V1(page_reader) => {
+                page_reader.read(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::PlainDataPageReaderFloat64V1(page_reader) => {
+                page_reader.read(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::RleBpDataPageReaderInt32V1(page_reader) => {
+                page_reader.read(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::RleBpDataPageReaderInt64V1(page_reader) => {
+                page_reader.read(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::RleBpDataPageReaderFloat32V1(page_reader) => {
+                page_reader.read(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => {
+                page_reader.read(to_read, offset, result_row_range_set, result_bridge)
+            }
+        }
+    }
+
+    fn read_with_filter(
+        &mut self,
+        to_read: RowRange,
+        offset: usize,
+        result_row_range_set: &mut RowRangeSet,
+        result_bridge: &mut dyn ResultBridge,
+    ) -> Result<bool, BoltReaderError> {
+        match self {
+            DataPageEnum::BooleanDataPageReaderV1(page_reader) => {
+                page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::PlainDataPageReaderInt32V1(page_reader) => {
+                page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::PlainDataPageReaderInt64V1(page_reader) => {
+                page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::PlainDataPageReaderFloat32V1(page_reader) => {
+                page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::PlainDataPageReaderFloat64V1(page_reader) => {
+                page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::RleBpDataPageReaderInt32V1(page_reader) => {
+                page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::RleBpDataPageReaderInt64V1(page_reader) => {
+                page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::RleBpDataPageReaderFloat32V1(page_reader) => {
+                page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => {
+                page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
+            }
+        }
+    }
 }
 
 pub trait DataPage<T> {
