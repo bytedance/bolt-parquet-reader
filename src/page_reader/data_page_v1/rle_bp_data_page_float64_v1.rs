@@ -14,13 +14,16 @@
 // limitations under the License.
 
 use std::fmt::Formatter;
+use std::rc::Rc;
 
 use crate::bridge::result_bridge::ResultBridge;
 use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
 use crate::metadata::parquet_metadata_thrift;
 use crate::metadata::parquet_metadata_thrift::PageHeader;
 use crate::page_reader::data_page_v1::data_page_base::DataPageNew;
-use crate::page_reader::dictionary_page::dictionary_page_base::DictionaryPageNew;
+use crate::page_reader::dictionary_page::dictionary_page_base::{
+    DictionaryPageEnum, DictionaryPageNew,
+};
 use crate::utils::byte_buffer_base::ByteBufferBase;
 use crate::utils::encoding::rle_bp::RleBpDecoder;
 use crate::utils::exceptions::BoltReaderError;
@@ -49,7 +52,7 @@ pub struct RleBpDataPageReaderFloat64V1<'a> {
     data: Vec<u32>,
     data_with_nulls: Option<Vec<Option<f64>>>,
     nullable_selectivity: Option<Vec<bool>>,
-    dictionary_page: &'a dyn DictionaryPageNew,
+    dictionary_page: Rc<DictionaryPageEnum>,
 }
 
 #[allow(dead_code)]
@@ -175,7 +178,7 @@ impl<'a> RleBpDataPageReaderFloat64V1<'a> {
         mut data_size: usize,
         filter: Option<&'a (dyn FixedLengthRangeFilter + 'a)>,
         validity: Option<Vec<bool>>,
-        dictionary_page: &'a dyn DictionaryPageNew,
+        dictionary_page: Rc<DictionaryPageEnum>,
     ) -> Result<RleBpDataPageReaderFloat64V1<'a>, BoltReaderError> {
         let header = match &page_header.data_page_header {
             Some(data_page_v1) => data_page_v1,
@@ -314,6 +317,7 @@ impl<'a> RleBpDataPageReaderFloat64V1<'a> {
 mod tests {
     use std::cmp::min;
     use std::mem;
+    use std::rc::Rc;
 
     use crate::bridge::float64_bridge::Float64Bridge;
     use crate::bridge::result_bridge::ResultBridge;
@@ -325,7 +329,7 @@ mod tests {
         get_data_page_covered_range, DataPageNew,
     };
     use crate::page_reader::data_page_v1::rle_bp_data_page_float64_v1::RleBpDataPageReaderFloat64V1;
-    use crate::page_reader::dictionary_page::dictionary_page_base::DictionaryPageNew;
+    use crate::page_reader::dictionary_page::dictionary_page_base::DictionaryPageEnum;
     use crate::page_reader::dictionary_page::dictionary_page_float64::DictionaryPageFloat64;
     use crate::page_reader::dictionary_page::dictionary_page_float64_with_filters::DictionaryPageWithFilterFloat64;
     use crate::utils::byte_buffer_base::ByteBufferBase;
@@ -339,31 +343,35 @@ mod tests {
 
     const STEAMING_BUFFER_SIZE: usize = 1 << 8;
 
-    fn load_dictionary_page(buf: &mut dyn ByteBufferBase) -> DictionaryPageFloat64 {
+    fn load_dictionary_page(buf: &mut dyn ByteBufferBase) -> Rc<DictionaryPageEnum> {
         let page_header = read_page_header(buf);
         assert!(page_header.is_ok());
         let page_header = page_header.unwrap();
         let dictionary_page = DictionaryPageFloat64::new(&page_header, buf, mem::size_of::<f64>());
         assert!(dictionary_page.is_ok());
-        dictionary_page.unwrap()
+        Rc::from(DictionaryPageEnum::DictionaryPageFloat64(
+            dictionary_page.unwrap(),
+        ))
     }
 
     fn load_dictionary_page_with_filter(
         buf: &mut dyn ByteBufferBase,
         filter: &dyn FixedLengthRangeFilter,
-    ) -> DictionaryPageWithFilterFloat64 {
+    ) -> Rc<DictionaryPageEnum> {
         let page_header = read_page_header(buf);
         assert!(page_header.is_ok());
         let page_header = page_header.unwrap();
         let dictionary_page =
             DictionaryPageWithFilterFloat64::new(&page_header, buf, mem::size_of::<f64>(), filter);
         assert!(dictionary_page.is_ok());
-        dictionary_page.unwrap()
+        Rc::from(DictionaryPageEnum::DictionaryPageWithFilterFloat64(
+            dictionary_page.unwrap(),
+        ))
     }
 
     fn load_rle_bp_page<'a>(
         buf: &'a mut dyn ByteBufferBase,
-        dictionary: &'a dyn DictionaryPageNew,
+        dictionary: Rc<DictionaryPageEnum>,
         filter: Option<&'a (dyn FixedLengthRangeFilter + 'a)>,
         offset: usize,
     ) -> Result<RleBpDataPageReaderFloat64V1<'a>, BoltReaderError> {
@@ -462,7 +470,7 @@ mod tests {
         let mut buf = res.unwrap();
 
         let dictionary_page = load_dictionary_page(&mut buf);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, None, 100);
+        let data_page = load_rle_bp_page(&mut buf, Rc::clone(&dictionary_page), None, 100);
         assert!(data_page.is_ok());
         let data_page = data_page.unwrap();
 
@@ -480,7 +488,7 @@ mod tests {
         let mut buf = res.unwrap();
 
         let dictionary_page = load_dictionary_page(&mut buf);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, None, 100);
+        let data_page = load_rle_bp_page(&mut buf, Rc::clone(&dictionary_page), None, 100);
         assert!(data_page.is_ok());
         let data_page = data_page.unwrap();
 
@@ -498,7 +506,7 @@ mod tests {
         let mut buf = res.unwrap();
 
         let dictionary_page = load_dictionary_page(&mut buf);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, None, 100);
+        let data_page = load_rle_bp_page(&mut buf, Rc::clone(&dictionary_page), None, 100);
         assert!(data_page.is_ok());
         let mut data_page = data_page.unwrap();
 
@@ -543,7 +551,7 @@ mod tests {
         let mut buf = res.unwrap();
 
         let dictionary_page = load_dictionary_page(&mut buf);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, None, 100);
+        let data_page = load_rle_bp_page(&mut buf, Rc::clone(&dictionary_page), None, 100);
         assert!(data_page.is_ok());
         let mut data_page = data_page.unwrap();
 
@@ -589,7 +597,7 @@ mod tests {
 
         let filter = IntegerRangeFilter::new(0, 100, false);
         let dictionary_page = load_dictionary_page_with_filter(&mut buf, &filter);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, Some(&filter), 100);
+        let data_page = load_rle_bp_page(&mut buf, Rc::clone(&dictionary_page), Some(&filter), 100);
         assert!(data_page.is_ok());
         let mut data_page = data_page.unwrap();
 
@@ -640,7 +648,12 @@ mod tests {
 
         let non_null_filter = IntegerRangeFilter::new(0, 100, false);
         let dictionary_page = load_dictionary_page_with_filter(&mut buf, &non_null_filter);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, Some(&non_null_filter), 100);
+        let data_page = load_rle_bp_page(
+            &mut buf,
+            Rc::clone(&dictionary_page),
+            Some(&non_null_filter),
+            100,
+        );
         assert!(data_page.is_ok());
         let mut data_page = data_page.unwrap();
 
@@ -691,7 +704,12 @@ mod tests {
 
         let nullable_filter = IntegerRangeFilter::new(0, 100, true);
         let dictionary_page = load_dictionary_page_with_filter(&mut buf, &nullable_filter);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, Some(&nullable_filter), 100);
+        let data_page = load_rle_bp_page(
+            &mut buf,
+            Rc::clone(&dictionary_page),
+            Some(&nullable_filter),
+            100,
+        );
         assert!(data_page.is_ok());
         let mut data_page = data_page.unwrap();
 
@@ -746,7 +764,7 @@ mod tests {
         let mut buf = res.unwrap();
 
         let dictionary_page = load_dictionary_page(&mut buf);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, None, 100);
+        let data_page = load_rle_bp_page(&mut buf, Rc::clone(&dictionary_page), None, 100);
         assert!(data_page.is_ok());
         let mut data_page = data_page.unwrap();
 
@@ -796,7 +814,7 @@ mod tests {
         let mut buf = res.unwrap();
 
         let dictionary_page = load_dictionary_page(&mut buf);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, None, 100);
+        let data_page = load_rle_bp_page(&mut buf, Rc::clone(&dictionary_page), None, 100);
         assert!(data_page.is_ok());
         let mut data_page = data_page.unwrap();
 
@@ -847,7 +865,7 @@ mod tests {
 
         let filter = IntegerRangeFilter::new(0, 100, false);
         let dictionary_page = load_dictionary_page_with_filter(&mut buf, &filter);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, Some(&filter), 100);
+        let data_page = load_rle_bp_page(&mut buf, Rc::clone(&dictionary_page), Some(&filter), 100);
         assert!(data_page.is_ok());
         let mut data_page = data_page.unwrap();
 
@@ -903,7 +921,12 @@ mod tests {
 
         let non_null_filter = IntegerRangeFilter::new(0, 100, false);
         let dictionary_page = load_dictionary_page_with_filter(&mut buf, &non_null_filter);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, Some(&non_null_filter), 100);
+        let data_page = load_rle_bp_page(
+            &mut buf,
+            Rc::clone(&dictionary_page),
+            Some(&non_null_filter),
+            100,
+        );
         assert!(data_page.is_ok());
         let mut data_page = data_page.unwrap();
 
@@ -959,7 +982,12 @@ mod tests {
 
         let nullable_filter = IntegerRangeFilter::new(0, 100, true);
         let dictionary_page = load_dictionary_page_with_filter(&mut buf, &nullable_filter);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, Some(&nullable_filter), 100);
+        let data_page = load_rle_bp_page(
+            &mut buf,
+            Rc::clone(&dictionary_page),
+            Some(&nullable_filter),
+            100,
+        );
         assert!(data_page.is_ok());
         let mut data_page = data_page.unwrap();
 
@@ -1016,7 +1044,7 @@ mod tests {
                 let mut buf = res.unwrap();
 
                 let dictionary_page = load_dictionary_page(&mut buf);
-                let data_page = load_rle_bp_page(&mut buf, &dictionary_page, None, 100);
+                let data_page = load_rle_bp_page(&mut buf, Rc::clone(&dictionary_page), None, 100);
                 assert!(data_page.is_ok());
                 let mut data_page = data_page.unwrap();
 
@@ -1068,7 +1096,7 @@ mod tests {
                 let mut buf = res.unwrap();
 
                 let dictionary_page = load_dictionary_page(&mut buf);
-                let data_page = load_rle_bp_page(&mut buf, &dictionary_page, None, 100);
+                let data_page = load_rle_bp_page(&mut buf, Rc::clone(&dictionary_page), None, 100);
                 assert!(data_page.is_ok());
                 let mut data_page = data_page.unwrap();
 
@@ -1113,7 +1141,7 @@ mod tests {
         let mut buf = res.unwrap();
 
         let dictionary_page = load_dictionary_page(&mut buf);
-        let data_page = load_rle_bp_page(&mut buf, &dictionary_page, None, 100);
+        let data_page = load_rle_bp_page(&mut buf, Rc::clone(&dictionary_page), None, 100);
         assert!(data_page.is_ok());
         let mut data_page = data_page.unwrap();
 
