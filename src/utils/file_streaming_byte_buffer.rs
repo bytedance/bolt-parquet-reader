@@ -185,9 +185,9 @@ impl ByteBufferBase for StreamingByteBuffer<'_> {
         Ok(&self.buffer.as_bytes()[start - self.buffer_offset..end - self.buffer_offset])
     }
 
-    fn get_direct_byte_buffer(&mut self) -> &mut DirectByteBuffer {
+    fn get_direct_byte_buffer(&mut self) -> Result<&mut DirectByteBuffer, BoltReaderError> {
         let _ = self.reload(self.buffer.get_rpos());
-        &mut self.buffer
+        Ok(&mut self.buffer)
     }
 
     #[inline(always)]

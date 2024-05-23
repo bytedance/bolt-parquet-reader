@@ -48,11 +48,11 @@ impl LoadFile for LocalFileLoader {
         self.size
     }
 
-    fn load_file_to_buffer(
+    fn load_file_to_raw_buffer(
         &self,
         offset: usize,
         length: usize,
-    ) -> Result<DirectByteBuffer, BoltReaderError> {
+    ) -> Result<Vec<u8>, BoltReaderError> {
         if offset + length > self.size {
             return Err(BoltReaderError::InternalError(format!(
                 "Reading range exceeds the file size: {} bytes. \nReading range [{}, {}) ",
@@ -63,9 +63,18 @@ impl LoadFile for LocalFileLoader {
         }
         let mut file = File::open(self.path.clone())?;
         file.seek(SeekFrom::Start(offset as u64))?;
-        let mut v = DirectByteBuffer::allocate_vec_for_buffer(length)?;
-        file.read_exact(&mut v)?;
-        let mut buffer = DirectByteBuffer::from_vec(v);
+        let mut raw_buffer = DirectByteBuffer::allocate_vec_for_buffer(length)?;
+        file.read_exact(&mut raw_buffer)?;
+
+        Ok(raw_buffer)
+    }
+
+    fn load_file_to_buffer(
+        &self,
+        offset: usize,
+        length: usize,
+    ) -> Result<DirectByteBuffer, BoltReaderError> {
+        let mut buffer = DirectByteBuffer::from_vec(self.load_file_to_raw_buffer(offset, length)?);
         buffer.set_endian(LittleEndian);
 
         Ok(buffer)
