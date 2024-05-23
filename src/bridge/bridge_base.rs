@@ -15,6 +15,19 @@
 
 use crate::utils::exceptions::BoltReaderError;
 use crate::utils::row_range_set::RowRangeSet;
+
+pub enum BridgeType {
+    RustVec,
+}
+
+pub enum BridgeDataType {
+    Boolean,
+    Int32,
+    Int64,
+    Float32,
+    Float64,
+}
+
 pub trait Bridge<T> {
     fn get_bridge_name(&self) -> String;
 

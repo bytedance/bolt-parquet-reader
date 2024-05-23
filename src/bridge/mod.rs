@@ -13,5 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod boolean_bridge;
 pub mod bridge_base;
+pub mod float32_bridge;
+pub mod float64_bridge;
+pub mod int32_bridge;
+pub mod int64_bridge;
 pub mod raw_bridge;
+pub mod result_bridge;
