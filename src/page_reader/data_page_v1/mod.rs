@@ -16,4 +16,8 @@
 pub mod boolean_data_page_v1;
 pub mod data_page_base;
 pub mod fixed_length_plain_data_page_v1;
+pub mod plain_data_page_float32_v1;
+pub mod plain_data_page_float64_v1;
+pub mod plain_data_page_int32_v1;
+pub mod plain_data_page_int64_v1;
 pub mod rle_bp_data_page_v1;
