@@ -74,7 +74,7 @@ impl Int64Bridge {
     pub fn new(may_has_null: bool, capacity: usize) -> Int64Bridge {
         Int64Bridge {
             bridge_type: BridgeType::RustVec,
-            bridge_data_type: BridgeDataType::Int32,
+            bridge_data_type: BridgeDataType::Int64,
             may_has_null,
             non_null_data: Vec::with_capacity(capacity),
             nullable_data: Vec::with_capacity(capacity),
