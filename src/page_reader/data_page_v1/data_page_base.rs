@@ -16,8 +16,37 @@
 use std::intrinsics::unlikely;
 
 use crate::bridge::bridge_base::Bridge;
+use crate::bridge::result_bridge::ResultBridge;
 use crate::utils::exceptions::BoltReaderError;
 use crate::utils::row_range_set::{RowRange, RowRangeSet};
+
+pub trait DataPageNew {
+    fn data_page_has_null(&self) -> bool;
+
+    fn get_data_page_num_values(&self) -> usize;
+
+    fn get_data_page_offset(&self) -> usize;
+
+    fn get_data_page_type_size(&self) -> usize;
+
+    fn is_zero_copied(&self) -> bool;
+
+    fn read(
+        &mut self,
+        to_read: RowRange,
+        offset: usize,
+        result_row_range_set: &mut RowRangeSet,
+        result_bridge: &mut dyn ResultBridge,
+    ) -> Result<bool, BoltReaderError>;
+
+    fn read_with_filter(
+        &mut self,
+        to_read: RowRange,
+        offset: usize,
+        result_row_range_set: &mut RowRangeSet,
+        result_bridge: &mut dyn ResultBridge,
+    ) -> Result<bool, BoltReaderError>;
+}
 
 pub trait DataPage<T> {
     fn data_page_has_null(&self) -> bool;

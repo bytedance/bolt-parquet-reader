@@ -16,11 +16,11 @@
 use std::fmt::Formatter;
 use std::mem;
 
-use crate::bridge::bridge_base::Bridge;
+use crate::bridge::result_bridge::ResultBridge;
 use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
 use crate::metadata::parquet_metadata_thrift;
 use crate::metadata::parquet_metadata_thrift::PageHeader;
-use crate::page_reader::data_page_v1::data_page_base::DataPage;
+use crate::page_reader::data_page_v1::data_page_base::DataPageNew;
 use crate::utils::byte_buffer_base::ByteBufferBase;
 use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
 use crate::utils::exceptions::BoltReaderError;
@@ -45,7 +45,8 @@ pub struct PlainDataPageReaderInt64V1<'a> {
     filter: Option<&'a dyn FixedLengthRangeFilter>,
     validity: Option<Vec<bool>>,
     data: Vec<i64>,
-    data_with_nulls: Option<Vec<i64>>,
+    data_with_nulls: Option<Vec<Option<i64>>>,
+    nullable_selectivity: Option<Vec<bool>>,
 }
 
 impl<'a> Drop for PlainDataPageReaderInt64V1<'a> {
@@ -86,7 +87,7 @@ impl<'a> std::fmt::Display for PlainDataPageReaderInt64V1<'a> {
     }
 }
 
-impl<'a> DataPage<i64> for PlainDataPageReaderInt64V1<'a> {
+impl<'a> DataPageNew for PlainDataPageReaderInt64V1<'a> {
     fn data_page_has_null(&self) -> bool {
         self.has_null
     }
@@ -112,7 +113,7 @@ impl<'a> DataPage<i64> for PlainDataPageReaderInt64V1<'a> {
         to_read: RowRange,
         offset: usize,
         result_row_range_set: &mut RowRangeSet,
-        result_bridge: &mut dyn Bridge<i64>,
+        result_bridge: &mut dyn ResultBridge,
     ) -> Result<bool, BoltReaderError> {
         let start = to_read.begin + offset - self.current_offset;
         let end = to_read.end + offset - self.current_offset;
@@ -123,7 +124,7 @@ impl<'a> DataPage<i64> for PlainDataPageReaderInt64V1<'a> {
 
             for i in self.nullable_index..end {
                 if validity[i] {
-                    data_with_nulls[i] = self.data[self.non_null_index];
+                    data_with_nulls[i] = Some(self.data[self.non_null_index]);
                     self.non_null_index += 1;
                 }
             }
@@ -133,14 +134,14 @@ impl<'a> DataPage<i64> for PlainDataPageReaderInt64V1<'a> {
                 to_read.begin + offset - result_row_range_set.get_offset(),
                 to_read.end + offset - result_row_range_set.get_offset(),
             );
-            result_bridge.append_results(&validity[start..end], &data_with_nulls[start..end])?;
+            result_bridge.append_nullable_int64_results(&data_with_nulls[start..end])?;
             end == self.num_values
         } else {
             result_row_range_set.add_row_ranges(
                 to_read.begin + offset - result_row_range_set.get_offset(),
                 to_read.end + offset - result_row_range_set.get_offset(),
             );
-            result_bridge.append_non_null_results(&self.data[start..end])?;
+            result_bridge.append_non_null_int64_results(&self.data[start..end])?;
             end == self.num_values
         };
         Ok(finished)
@@ -151,7 +152,7 @@ impl<'a> DataPage<i64> for PlainDataPageReaderInt64V1<'a> {
         to_read: RowRange,
         offset: usize,
         result_row_range_set: &mut RowRangeSet,
-        result_bridge: &mut dyn Bridge<i64>,
+        result_bridge: &mut dyn ResultBridge,
     ) -> Result<bool, BoltReaderError> {
         if self.has_null {
             self.read_nullable_with_filter(to_read, offset, result_row_range_set, result_bridge)
@@ -208,15 +209,15 @@ impl<'a> PlainDataPageReaderInt64V1<'a> {
                 type_size,
             )?
         };
+
         let data_with_nulls = if has_null {
-            let mut vec: Vec<i64> = Vec::with_capacity(num_values);
+            Some(vec![None; num_values])
+        } else {
+            None
+        };
 
-            let _remaining = vec.spare_capacity_mut();
-            unsafe {
-                vec.set_len(num_values);
-            }
-
-            Some(vec)
+        let nullable_selectivity = if has_null && filter.is_some() {
+            Some(vec![false; num_values])
         } else {
             None
         };
@@ -233,6 +234,7 @@ impl<'a> PlainDataPageReaderInt64V1<'a> {
             validity,
             data,
             data_with_nulls,
+            nullable_selectivity,
         })
     }
 
@@ -241,7 +243,7 @@ impl<'a> PlainDataPageReaderInt64V1<'a> {
         to_read: RowRange,
         offset: usize,
         result_row_range_set: &mut RowRangeSet,
-        result_bridge: &mut dyn Bridge<i64>,
+        result_bridge: &mut dyn ResultBridge,
     ) -> Result<bool, BoltReaderError> {
         let start = to_read.begin + offset - self.current_offset;
         let end = to_read.end + offset - self.current_offset;
@@ -253,7 +255,7 @@ impl<'a> PlainDataPageReaderInt64V1<'a> {
             let filter_res = filter.check_i64(self.data[i]);
             generator.update(i + self.current_offset - offset, filter_res);
             if filter_res {
-                result_bridge.append_non_null_result(self.data[i]);
+                result_bridge.append_non_null_int64_result(self.data[i])?;
             }
         }
         generator.finish(end + self.current_offset - offset);
@@ -266,7 +268,7 @@ impl<'a> PlainDataPageReaderInt64V1<'a> {
         to_read: RowRange,
         offset: usize,
         result_row_range_set: &mut RowRangeSet,
-        result_bridge: &mut dyn Bridge<i64>,
+        result_bridge: &mut dyn ResultBridge,
     ) -> Result<bool, BoltReaderError> {
         let start = to_read.begin + offset - self.current_offset;
         let end = to_read.end + offset - self.current_offset;
@@ -274,11 +276,18 @@ impl<'a> PlainDataPageReaderInt64V1<'a> {
         let filter = self.filter.as_ref().unwrap();
         let validity = self.validity.as_ref().unwrap();
         let data_with_nulls = self.data_with_nulls.as_mut().unwrap();
+        let nullable_selectivity = self.nullable_selectivity.as_mut().unwrap();
 
         for i in self.nullable_index..end {
             if validity[i] {
-                data_with_nulls[i] = self.data[self.non_null_index];
+                let raw_data = self.data[self.non_null_index];
+                data_with_nulls[i] = Some(raw_data);
+                nullable_selectivity[i] = filter.check_i64_with_validity(raw_data, validity[i]);
+
                 self.non_null_index += 1;
+            } else {
+                nullable_selectivity[i] =
+                    filter.check_i64_with_validity(i64::default(), validity[i]);
             }
         }
 
@@ -287,10 +296,9 @@ impl<'a> PlainDataPageReaderInt64V1<'a> {
         let mut generator = RowRangeSetGenerator::new(result_row_range_set);
 
         for i in start..end {
-            let filter_res = filter.check_i64_with_validity(data_with_nulls[i], validity[i]);
-            generator.update(i + self.current_offset - offset, filter_res);
-            if filter_res {
-                result_bridge.append_result(validity[i], data_with_nulls[i]);
+            generator.update(i + self.current_offset - offset, nullable_selectivity[i]);
+            if nullable_selectivity[i] {
+                result_bridge.append_nullable_int64_result(data_with_nulls[i])?;
             }
         }
         generator.finish(end + self.current_offset - offset);
@@ -303,13 +311,15 @@ impl<'a> PlainDataPageReaderInt64V1<'a> {
 mod tests {
     use std::cmp::min;
 
-    use crate::bridge::bridge_base::Bridge;
-    use crate::bridge::raw_bridge::RawBridge;
+    use crate::bridge::int64_bridge::Int64Bridge;
+    use crate::bridge::result_bridge::ResultBridge;
     use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
     use crate::filters::integer_range_filter::IntegerRangeFilter;
     use crate::metadata::page_header::read_page_header;
     use crate::metadata::parquet_metadata_thrift::Encoding;
-    use crate::page_reader::data_page_v1::data_page_base::{get_data_page_covered_range, DataPage};
+    use crate::page_reader::data_page_v1::data_page_base::{
+        get_data_page_covered_range, DataPageNew,
+    };
     use crate::page_reader::data_page_v1::plain_data_page_int64_v1::PlainDataPageReaderInt64V1;
     use crate::utils::byte_buffer_base::ByteBufferBase;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
@@ -364,14 +374,14 @@ mod tests {
 
     fn verify_non_null_result(
         result_row_range_set: &RowRangeSet,
-        raw_bridge: &RawBridge<i64>,
+        raw_bridge: &dyn ResultBridge,
         filter: Option<&dyn FixedLengthRangeFilter>,
     ) {
         let offset = result_row_range_set.get_offset();
         for row_range in result_row_range_set.get_row_ranges() {
             for i in row_range.begin..row_range.end {
                 let (validity, value) = raw_bridge
-                    .get_validity_and_value(offset, i, &result_row_range_set)
+                    .get_int64_validity_and_value(offset, i, &result_row_range_set)
                     .unwrap();
 
                 assert_eq!(validity, true);
@@ -386,14 +396,14 @@ mod tests {
 
     fn verify_nullable_result(
         result_row_range_set: &RowRangeSet,
-        raw_bridge: &RawBridge<i64>,
+        raw_bridge: &dyn ResultBridge,
         filter: Option<&dyn FixedLengthRangeFilter>,
     ) {
         let offset = result_row_range_set.get_offset();
         for row_range in result_row_range_set.get_row_ranges() {
             for i in row_range.begin..row_range.end {
                 let (validity, value) = raw_bridge
-                    .get_validity_and_value(offset, i, &result_row_range_set)
+                    .get_int64_validity_and_value(offset, i, &result_row_range_set)
                     .unwrap();
 
                 if i % 5 == 0 || i % 17 == 0 {
@@ -535,7 +545,7 @@ mod tests {
             let to_read = to_read.unwrap();
 
             let mut result_row_range_set = RowRangeSet::new(offset);
-            let mut raw_bridge = RawBridge::new(false, capacity);
+            let mut raw_bridge = Int64Bridge::new(false, capacity);
             let res = boolean_page_reader.read(
                 to_read,
                 offset,
@@ -589,7 +599,7 @@ mod tests {
             let to_read = to_read.unwrap();
 
             let mut result_row_range_set = RowRangeSet::new(offset);
-            let mut raw_bridge = RawBridge::new(false, capacity);
+            let mut raw_bridge = Int64Bridge::new(false, capacity);
             let res = boolean_page_reader.read_with_filter(
                 to_read,
                 offset,
@@ -640,7 +650,7 @@ mod tests {
             let to_read = to_read.unwrap();
 
             let mut result_row_range_set = RowRangeSet::new(offset);
-            let mut raw_bridge = RawBridge::new(false, capacity);
+            let mut raw_bridge = Int64Bridge::new(false, capacity);
             let res = boolean_page_reader.read(
                 to_read,
                 offset,
@@ -692,7 +702,7 @@ mod tests {
             let to_read = to_read.unwrap();
 
             let mut result_row_range_set = RowRangeSet::new(offset);
-            let mut raw_bridge = RawBridge::new(false, capacity);
+            let mut raw_bridge = Int64Bridge::new(false, capacity);
             let res = boolean_page_reader.read_with_filter(
                 to_read,
                 offset,
@@ -743,7 +753,7 @@ mod tests {
             let to_read = to_read.unwrap();
 
             let mut result_row_range_set = RowRangeSet::new(offset);
-            let mut raw_bridge = RawBridge::new(false, capacity);
+            let mut raw_bridge = Int64Bridge::new(true, capacity);
             let res = boolean_page_reader.read(
                 to_read,
                 offset,
@@ -797,7 +807,7 @@ mod tests {
             let to_read = to_read.unwrap();
 
             let mut result_row_range_set = RowRangeSet::new(offset);
-            let mut raw_bridge = RawBridge::new(false, capacity);
+            let mut raw_bridge = Int64Bridge::new(true, capacity);
             let res = boolean_page_reader.read_with_filter(
                 to_read,
                 offset,
@@ -848,7 +858,7 @@ mod tests {
             let to_read = to_read.unwrap();
 
             let mut result_row_range_set = RowRangeSet::new(offset);
-            let mut raw_bridge = RawBridge::new(false, capacity);
+            let mut raw_bridge = Int64Bridge::new(true, capacity);
             let res = boolean_page_reader.read(
                 to_read,
                 offset,
@@ -900,7 +910,7 @@ mod tests {
             let to_read = to_read.unwrap();
 
             let mut result_row_range_set = RowRangeSet::new(offset);
-            let mut raw_bridge = RawBridge::new(false, capacity);
+            let mut raw_bridge = Int64Bridge::new(true, capacity);
             let res = boolean_page_reader.read_with_filter(
                 to_read,
                 offset,
