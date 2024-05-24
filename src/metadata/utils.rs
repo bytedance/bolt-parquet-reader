@@ -16,16 +16,27 @@
 use std::collections::HashMap;
 use std::intrinsics::unlikely;
 
-use crate::metadata::parquet_metadata_thrift::{SchemaElement, Type};
+use crate::metadata::parquet_metadata_thrift::{
+    ConvertedType, FieldRepetitionType, SchemaElement, Type,
+};
 use crate::utils::exceptions::BoltReaderError;
+
+pub enum SchemaNodeType {
+    Leaf,
+    List,
+    ListElement,
+    Map,
+    MapElement,
+    Struct,
+}
 
 // Current, the ColumnType only supports primitive type. More nested type related strut members will be added in the
 // future.
-#[allow(dead_code)]
 pub struct ColumnSchema {
     pub is_leaf: bool,
     pub name: String,
-    pub type_: Option<Type>,
+    schema_node_type: SchemaNodeType,
+    pub physical_type: Option<Type>,
     pub children: Option<Vec<ColumnSchema>>,
     pub column_idx: usize,
     pub max_def: u32,
@@ -36,31 +47,25 @@ impl ColumnSchema {
     pub fn new(
         is_leaf: bool,
         name: String,
-        type_: Option<Type>,
+        schema_node_type: SchemaNodeType,
+        physical_type: Option<Type>,
         column_idx: usize,
+        max_def: u32,
+        max_rep: u32,
     ) -> Result<ColumnSchema, BoltReaderError> {
-        if !is_leaf {
-            return Err(BoltReaderError::NotYetImplementedError(String::from(
-                "Not Yet Implemented: Nested Type",
-            )));
-        }
-
         Ok(ColumnSchema {
             is_leaf,
             name,
-            type_,
+            schema_node_type,
+            physical_type,
             children: None,
             column_idx,
-            max_def: 1,
-            max_rep: 0,
+            max_def,
+            max_rep,
         })
     }
 }
 
-// Currently, this API is only able to parse primitive Parquet Schema. The Parquet schema is stored
-// in recursive structure to represent the nested types. But for primitive types, all the schemas
-// are at leaf level.
-// TODO: Support complex types.
 pub fn prepare_schema(
     schema_elements: &[SchemaElement],
 ) -> Result<HashMap<String, ColumnSchema>, BoltReaderError> {
@@ -77,58 +82,230 @@ pub fn prepare_schema(
         )));
     }
 
-    prepare_schema_internal(schema_elements, 0)
+    prepare_schema_internal(schema_elements)
 }
 
-// Implemented without recursion for primitive types only. Need to be updated when supporting nested
-// types.
+pub fn create_column_schema_node(
+    cur_schema: &SchemaElement,
+    max_def: u32,
+    max_rep: u32,
+    column_idx: usize,
+) -> Result<ColumnSchema, BoltReaderError> {
+    match cur_schema.type_ {
+        // Non-leaf Node
+        None => {
+            match cur_schema.converted_type {
+                // There are 3 possibilities:
+                // 1. ListElement
+                // 2. MapElement
+                // 3. Struct
+                None => match cur_schema.repetition_type {
+                    None => Err(BoltReaderError::MetadataError(String::from(
+                        "Schema Repetition Type cannot be empty for nested types",
+                    ))),
+                    Some(repetition_type) => {
+                        if repetition_type == FieldRepetitionType::REPEATED {
+                            match cur_schema.num_children {
+                                None => Err(BoltReaderError::MetadataError(String::from(
+                                    "Nested Types must have childrens",
+                                ))),
+                                Some(num_children) => {
+                                    if num_children == 1 {
+                                        ColumnSchema::new(
+                                            false,
+                                            cur_schema.name.clone(),
+                                            SchemaNodeType::ListElement,
+                                            None,
+                                            column_idx,
+                                            max_def,
+                                            max_rep,
+                                        )
+                                    } else if num_children == 2 {
+                                        ColumnSchema::new(
+                                            false,
+                                            cur_schema.name.clone(),
+                                            SchemaNodeType::MapElement,
+                                            None,
+                                            column_idx,
+                                            max_def,
+                                            max_rep,
+                                        )
+                                    } else {
+                                        Err(BoltReaderError::MetadataError(String::from(
+                                            "List/Map must have at most 2 children",
+                                        )))
+                                    }
+                                }
+                            }
+                        } else {
+                            ColumnSchema::new(
+                                false,
+                                cur_schema.name.clone(),
+                                SchemaNodeType::Struct,
+                                None,
+                                column_idx,
+                                max_def,
+                                max_rep,
+                            )
+                        }
+                    }
+                },
+                // Converted Types
+                // TODO: Currently, we only have List and Map. Add all the converted types in the future.
+                Some(converted_type) => match converted_type {
+                    ConvertedType::LIST => ColumnSchema::new(
+                        false,
+                        cur_schema.name.clone(),
+                        SchemaNodeType::List,
+                        None,
+                        column_idx,
+                        max_def,
+                        max_rep,
+                    ),
+                    ConvertedType::MAP => ColumnSchema::new(
+                        false,
+                        cur_schema.name.clone(),
+                        SchemaNodeType::Map,
+                        None,
+                        column_idx,
+                        max_def,
+                        max_rep,
+                    ),
+                    ConvertedType::MAP_KEY_VALUE => ColumnSchema::new(
+                        false,
+                        cur_schema.name.clone(),
+                        SchemaNodeType::MapElement,
+                        None,
+                        column_idx,
+                        max_def,
+                        max_rep,
+                    ),
+                    _ => Err(BoltReaderError::MetadataError(format!(
+                        "This converted type {} is not yes implemented",
+                        converted_type.0
+                    ))),
+                },
+            }
+        }
+
+        // Leaf Node
+        Some(physical_type) => ColumnSchema::new(
+            true,
+            cur_schema.name.clone(),
+            SchemaNodeType::Leaf,
+            Some(physical_type),
+            column_idx,
+            max_def,
+            max_rep,
+        ),
+    }
+}
+
+pub fn prepare_schema_internal_recursive(
+    schema_elements: &[SchemaElement],
+    schema_idx: &mut usize,
+    mut max_def: u32,
+    mut max_rep: u32,
+    column_idx: &mut usize,
+) -> Result<ColumnSchema, BoltReaderError> {
+    let cur_schema = &schema_elements[*schema_idx];
+
+    match cur_schema.repetition_type {
+        None => {}
+        Some(repetition_type) => {
+            if repetition_type != FieldRepetitionType::REQUIRED {
+                max_def += 1;
+            }
+            if repetition_type == FieldRepetitionType::REPEATED {
+                max_rep += 1;
+            }
+        }
+    }
+
+    let mut column_schema = create_column_schema_node(cur_schema, max_def, max_rep, *column_idx)?;
+    let schema_node_type = &column_schema.schema_node_type;
+    *schema_idx += 1;
+    match schema_node_type {
+        SchemaNodeType::Leaf => {
+            *column_idx += 1;
+        }
+
+        SchemaNodeType::List | SchemaNodeType::ListElement | SchemaNodeType::Map => {
+            let num_children = cur_schema.num_children.unwrap();
+            if num_children != 1 {
+                return Err(BoltReaderError::MetadataError(String::from(
+                    "List/Map/ListElement Schema Node should have 1 child",
+                )));
+            }
+            let children: Vec<ColumnSchema> = vec![prepare_schema_internal_recursive(
+                schema_elements,
+                schema_idx,
+                max_def,
+                max_rep,
+                column_idx,
+            )?];
+            column_schema.children = Some(children);
+        }
+
+        SchemaNodeType::MapElement => {
+            let num_children = cur_schema.num_children.unwrap();
+            if num_children != 2 {
+                return Err(BoltReaderError::MetadataError(String::from(
+                    "MapElement Schema Node should have 1 child",
+                )));
+            }
+            let mut children: Vec<ColumnSchema> = Default::default();
+            for _ in 0..num_children {
+                children.push(prepare_schema_internal_recursive(
+                    schema_elements,
+                    schema_idx,
+                    max_def,
+                    max_rep,
+                    column_idx,
+                )?);
+            }
+            column_schema.children = Some(children);
+        }
+
+        SchemaNodeType::Struct => {
+            let num_children = cur_schema.num_children.unwrap();
+
+            let mut children: Vec<ColumnSchema> = Default::default();
+            for _ in 0..num_children {
+                children.push(prepare_schema_internal_recursive(
+                    schema_elements,
+                    schema_idx,
+                    max_def,
+                    max_rep,
+                    column_idx,
+                )?);
+            }
+            column_schema.children = Some(children);
+        }
+    };
+
+    Ok(column_schema)
+}
+
 pub fn prepare_schema_internal(
     schema_elements: &[SchemaElement],
-    schema_index: usize,
 ) -> Result<HashMap<String, ColumnSchema>, BoltReaderError> {
     let mut columns = HashMap::new();
-    let schema_node = &schema_elements[schema_index];
-    match schema_node.num_children {
+
+    let mut schema_idx = 0;
+    let mut column_idx = 0;
+    let root =
+        prepare_schema_internal_recursive(schema_elements, &mut schema_idx, 0, 0, &mut column_idx)?;
+
+    match root.children {
         None => {
             return Err(BoltReaderError::MetadataError(String::from(
-                "Parent Schema Node Does Not Contain Children.",
-            )));
+                "The root schema node has no child",
+            )))
         }
-        Some(num_children) => {
-            let mut leaf_index = 0;
-            for child in schema_elements
-                .iter()
-                .take(num_children as usize + 1)
-                .skip(schema_index + 1)
-            {
-                // TODO: Use recursion here
-                match child.num_children {
-                    Some(_) => {
-                        return Err(BoltReaderError::NotYetImplementedError(String::from(
-                            "Not Yet Implemented: Nested Type",
-                        )))
-                    }
-
-                    None => match child.type_ {
-                        None => {
-                            return Err(BoltReaderError::MetadataError(String::from(
-                                "Primitive Type Column Does Not Contain Type Info",
-                            )))
-                        }
-                        Some(type_) => {
-                            columns.insert(
-                                child.name.clone(),
-                                ColumnSchema::new(
-                                    true,
-                                    child.name.clone(),
-                                    Some(type_),
-                                    leaf_index,
-                                )?,
-                            );
-                            leaf_index += 1;
-                        }
-                    },
-                }
+        Some(children) => {
+            for child in children {
+                columns.insert(child.name.clone(), child);
             }
         }
     }
@@ -168,14 +345,15 @@ mod tests {
         let column = res.unwrap();
         assert_eq!(column.is_leaf, true);
         assert_eq!(column.name, "col1");
-        assert!(column.type_.is_some());
-        assert_eq!(column.type_.unwrap(), Type::INT64);
+        assert!(column.physical_type.is_some());
+        assert_eq!(column.physical_type.unwrap(), Type::INT64);
         assert!(column.children.is_none());
     }
 
     #[test]
     fn test_load_column_schema_lineitem() {
         let file = String::from("src/sample_files/lineitem.parquet");
+
         let footer = load_parquet_footer(file);
 
         let res = prepare_schema(&footer.schema);
