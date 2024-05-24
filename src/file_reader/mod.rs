@@ -13,4 +13,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod local_file_reader;
 pub mod row_group_reader;
