@@ -437,7 +437,21 @@ impl<'a> PrimitiveColumnReader<'a> {
             let data_size =
                 page_header.uncompressed_page_size - (self.buffer.get_rpos() - rpos) as i32;
 
-            if self.dictionary_page.is_some() {
+            match &page_header.data_page_header {
+                Some(data_page_v1) => data_page_v1,
+                None => {
+                    return Err(BoltReaderError::FixedLengthDataPageError(String::from(
+                        "Error when reading Data Page V1 Header",
+                    )))
+                }
+            };
+
+            let is_dictionary_encoded = (page_header.data_page_header.as_ref().unwrap().encoding
+                == Encoding::PLAIN_DICTIONARY)
+                || (page_header.data_page_header.as_ref().unwrap().encoding
+                    == Encoding::RLE_DICTIONARY);
+
+            if self.dictionary_page.is_some() && is_dictionary_encoded {
                 self.current_data_page = match self.physical_data_type {
                     PhysicalDataType::Boolean => None,
 
