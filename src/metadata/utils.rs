@@ -23,13 +23,13 @@ use crate::utils::exceptions::BoltReaderError;
 // future.
 #[allow(dead_code)]
 pub struct ColumnSchema {
-    is_leaf: bool,
-    name: String,
-    type_: Option<Type>,
-    children: Option<Vec<ColumnSchema>>,
-    column_idx: usize,
-    max_def: u32,
-    max_rep: u32,
+    pub is_leaf: bool,
+    pub name: String,
+    pub type_: Option<Type>,
+    pub children: Option<Vec<ColumnSchema>>,
+    pub column_idx: usize,
+    pub max_def: u32,
+    pub max_rep: u32,
 }
 
 impl ColumnSchema {

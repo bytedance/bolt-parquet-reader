@@ -320,7 +320,6 @@ mod tests {
     use std::rc::Rc;
 
     use crate::bridge::int64_bridge::Int64Bridge;
-    use crate::bridge::result_bridge::ResultBridge;
     use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
     use crate::filters::integer_range_filter::IntegerRangeFilter;
     use crate::metadata::page_header::read_page_header;
@@ -340,6 +339,9 @@ mod tests {
     use crate::utils::local_file_loader::LocalFileLoader;
     use crate::utils::rep_def_parser::RepDefParser;
     use crate::utils::row_range_set::{RowRange, RowRangeSet};
+    use crate::utils::test_utils::test_utils::{
+        verify_rle_bp_int64_non_null_result, verify_rle_bp_int64_nullable_result,
+    };
 
     const STEAMING_BUFFER_SIZE: usize = 1 << 8;
 
@@ -413,50 +415,6 @@ mod tests {
             dictionary,
         );
         data_page
-    }
-
-    fn verify_non_null_result(
-        result_row_range_set: &RowRangeSet,
-        raw_bridge: &dyn ResultBridge,
-        filter: Option<&dyn FixedLengthRangeFilter>,
-    ) {
-        let offset = result_row_range_set.get_offset();
-        for row_range in result_row_range_set.get_row_ranges() {
-            for i in row_range.begin..row_range.end {
-                assert_eq!(
-                    raw_bridge
-                        .get_int64_validity_and_value(offset, i, &result_row_range_set)
-                        .unwrap(),
-                    (true, (i % 1000) as i64)
-                );
-                if let Some(filter) = filter {
-                    assert!(filter.check_i64((i % 1000) as i64));
-                }
-            }
-        }
-    }
-
-    fn verify_nullable_result(
-        result_row_range_set: &RowRangeSet,
-        raw_bridge: &dyn ResultBridge,
-        filter: Option<&dyn FixedLengthRangeFilter>,
-    ) {
-        let offset = result_row_range_set.get_offset();
-        for row_range in result_row_range_set.get_row_ranges() {
-            for i in row_range.begin..row_range.end {
-                let (validity, value) = raw_bridge
-                    .get_int64_validity_and_value(offset, i, &result_row_range_set)
-                    .unwrap();
-                if i % 5 == 0 || i % 17 == 0 {
-                    assert_eq!(validity, false);
-                } else {
-                    assert_eq!((validity, value), (true, (i % 1000) as i64));
-                }
-                if let Some(filter) = filter {
-                    assert!(filter.check_i64_with_validity(value, validity));
-                }
-            }
-        }
     }
 
     #[test]
@@ -535,7 +493,7 @@ mod tests {
             let mut raw_bridge = Int64Bridge::new(false, capacity);
             let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
             assert!(res.is_ok());
-            verify_non_null_result(&result_row_range_set, &raw_bridge, None);
+            verify_rle_bp_int64_non_null_result(&result_row_range_set, &raw_bridge, None);
             begin = end;
         }
     }
@@ -580,7 +538,7 @@ mod tests {
             let mut raw_bridge = Int64Bridge::new(true, capacity);
             let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
             assert!(res.is_ok());
-            verify_nullable_result(&result_row_range_set, &raw_bridge, None);
+            verify_rle_bp_int64_nullable_result(&result_row_range_set, &raw_bridge, None);
             begin = end;
         }
     }
@@ -631,7 +589,7 @@ mod tests {
                 &mut raw_bridge,
             );
             assert!(res.is_ok());
-            verify_non_null_result(&result_row_range_set, &raw_bridge, Some(&filter));
+            verify_rle_bp_int64_non_null_result(&result_row_range_set, &raw_bridge, Some(&filter));
             begin = end;
         }
     }
@@ -687,7 +645,11 @@ mod tests {
                 &mut raw_bridge,
             );
             assert!(res.is_ok());
-            verify_nullable_result(&result_row_range_set, &raw_bridge, Some(&non_null_filter));
+            verify_rle_bp_int64_nullable_result(
+                &result_row_range_set,
+                &raw_bridge,
+                Some(&non_null_filter),
+            );
             begin = end;
         }
     }
@@ -743,7 +705,11 @@ mod tests {
                 &mut raw_bridge,
             );
             assert!(res.is_ok());
-            verify_nullable_result(&result_row_range_set, &raw_bridge, Some(&nullable_filter));
+            verify_rle_bp_int64_nullable_result(
+                &result_row_range_set,
+                &raw_bridge,
+                Some(&nullable_filter),
+            );
             begin = end;
         }
     }
@@ -793,7 +759,7 @@ mod tests {
             let mut raw_bridge = Int64Bridge::new(false, capacity);
             let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
             assert!(res.is_ok());
-            verify_non_null_result(&result_row_range_set, &raw_bridge, None);
+            verify_rle_bp_int64_non_null_result(&result_row_range_set, &raw_bridge, None);
             begin = end;
         }
     }
@@ -843,7 +809,7 @@ mod tests {
             let mut raw_bridge = Int64Bridge::new(true, capacity);
             let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
             assert!(res.is_ok());
-            verify_nullable_result(&result_row_range_set, &raw_bridge, None);
+            verify_rle_bp_int64_nullable_result(&result_row_range_set, &raw_bridge, None);
             begin = end;
         }
     }
@@ -899,7 +865,7 @@ mod tests {
                 &mut raw_bridge,
             );
             assert!(res.is_ok());
-            verify_non_null_result(&result_row_range_set, &raw_bridge, Some(&filter));
+            verify_rle_bp_int64_non_null_result(&result_row_range_set, &raw_bridge, Some(&filter));
             begin = end;
         }
     }
@@ -960,7 +926,11 @@ mod tests {
                 &mut raw_bridge,
             );
             assert!(res.is_ok());
-            verify_nullable_result(&result_row_range_set, &raw_bridge, Some(&non_null_filter));
+            verify_rle_bp_int64_nullable_result(
+                &result_row_range_set,
+                &raw_bridge,
+                Some(&non_null_filter),
+            );
             begin = end;
         }
     }
@@ -1021,7 +991,11 @@ mod tests {
                 &mut raw_bridge,
             );
             assert!(res.is_ok());
-            verify_nullable_result(&result_row_range_set, &raw_bridge, Some(&nullable_filter));
+            verify_rle_bp_int64_nullable_result(
+                &result_row_range_set,
+                &raw_bridge,
+                Some(&nullable_filter),
+            );
             begin = end;
         }
     }
@@ -1070,7 +1044,7 @@ mod tests {
                         data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
                     assert!(res.is_ok());
 
-                    verify_non_null_result(&result_row_range_set, &raw_bridge, None);
+                    verify_rle_bp_int64_non_null_result(&result_row_range_set, &raw_bridge, None);
                     begin = end;
                     end = min(end + step, 1200);
                 }
@@ -1122,7 +1096,7 @@ mod tests {
                         data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
                     assert!(res.is_ok());
 
-                    verify_nullable_result(&result_row_range_set, &raw_bridge, None);
+                    verify_rle_bp_int64_nullable_result(&result_row_range_set, &raw_bridge, None);
                     begin = end;
                     end = min(end + step, 1200);
                 }
@@ -1166,6 +1140,6 @@ mod tests {
         let mut raw_bridge = Int64Bridge::new(false, capacity);
         let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
         assert!(res.is_ok());
-        verify_non_null_result(&result_row_range_set, &raw_bridge, None);
+        verify_rle_bp_int64_non_null_result(&result_row_range_set, &raw_bridge, None);
     }
 }

@@ -28,9 +28,13 @@ pub enum PhysicalDataType {
 }
 
 pub trait ColumnReaderNew {
+    fn get_physical_type(&self) -> &PhysicalDataType;
+
     fn get_column_num_values(&self) -> usize;
 
     fn get_data_type_size(&self) -> usize;
+
+    fn get_column_name(&self) -> &String;
 
     fn read(
         &mut self,

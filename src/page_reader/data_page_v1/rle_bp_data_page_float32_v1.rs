@@ -192,7 +192,8 @@ impl<'a> RleBpDataPageReaderFloat32V1<'a> {
         let num_values = header.num_values as usize;
         let encoding = header.encoding;
 
-        if encoding != parquet_metadata_thrift::Encoding::RLE_DICTIONARY
+        if encoding != parquet_metadata_thrift::Encoding::PLAIN
+            && encoding != parquet_metadata_thrift::Encoding::RLE_DICTIONARY
             && encoding != parquet_metadata_thrift::Encoding::PLAIN_DICTIONARY
         {
             return Err(BoltReaderError::FixedLengthDataPageError(String::from(
@@ -320,7 +321,6 @@ mod tests {
     use std::rc::Rc;
 
     use crate::bridge::float32_bridge::Float32Bridge;
-    use crate::bridge::result_bridge::ResultBridge;
     use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
     use crate::filters::integer_range_filter::IntegerRangeFilter;
     use crate::metadata::page_header::read_page_header;
@@ -340,6 +340,9 @@ mod tests {
     use crate::utils::local_file_loader::LocalFileLoader;
     use crate::utils::rep_def_parser::RepDefParser;
     use crate::utils::row_range_set::{RowRange, RowRangeSet};
+    use crate::utils::test_utils::test_utils::{
+        verify_rle_bp_float32_non_null_result, verify_rle_bp_float32_nullable_result,
+    };
 
     const STEAMING_BUFFER_SIZE: usize = 1 << 8;
 
@@ -413,50 +416,6 @@ mod tests {
             dictionary,
         );
         data_page
-    }
-
-    fn verify_non_null_result(
-        result_row_range_set: &RowRangeSet,
-        raw_bridge: &dyn ResultBridge,
-        filter: Option<&dyn FixedLengthRangeFilter>,
-    ) {
-        let offset = result_row_range_set.get_offset();
-        for row_range in result_row_range_set.get_row_ranges() {
-            for i in row_range.begin..row_range.end {
-                assert_eq!(
-                    raw_bridge
-                        .get_float32_validity_and_value(offset, i, &result_row_range_set)
-                        .unwrap(),
-                    (true, (i % 1000) as f32)
-                );
-                if let Some(filter) = filter {
-                    assert!(filter.check_f32((i % 1000) as f32));
-                }
-            }
-        }
-    }
-
-    fn verify_nullable_result(
-        result_row_range_set: &RowRangeSet,
-        raw_bridge: &dyn ResultBridge,
-        filter: Option<&dyn FixedLengthRangeFilter>,
-    ) {
-        let offset = result_row_range_set.get_offset();
-        for row_range in result_row_range_set.get_row_ranges() {
-            for i in row_range.begin..row_range.end {
-                let (validity, value) = raw_bridge
-                    .get_float32_validity_and_value(offset, i, &result_row_range_set)
-                    .unwrap();
-                if i % 5 == 0 || i % 17 == 0 {
-                    assert_eq!(validity, false);
-                } else {
-                    assert_eq!((validity, value), (true, (i % 1000) as f32));
-                }
-                if let Some(filter) = filter {
-                    assert!(filter.check_f32_with_validity(value, validity));
-                }
-            }
-        }
     }
 
     #[test]
@@ -535,7 +494,7 @@ mod tests {
             let mut raw_bridge = Float32Bridge::new(false, capacity);
             let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
             assert!(res.is_ok());
-            verify_non_null_result(&result_row_range_set, &raw_bridge, None);
+            verify_rle_bp_float32_non_null_result(&result_row_range_set, &raw_bridge, None);
             begin = end;
         }
     }
@@ -580,7 +539,7 @@ mod tests {
             let mut raw_bridge = Float32Bridge::new(true, capacity);
             let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
             assert!(res.is_ok());
-            verify_nullable_result(&result_row_range_set, &raw_bridge, None);
+            verify_rle_bp_float32_nullable_result(&result_row_range_set, &raw_bridge, None);
             begin = end;
         }
     }
@@ -631,7 +590,11 @@ mod tests {
                 &mut raw_bridge,
             );
             assert!(res.is_ok());
-            verify_non_null_result(&result_row_range_set, &raw_bridge, Some(&filter));
+            verify_rle_bp_float32_non_null_result(
+                &result_row_range_set,
+                &raw_bridge,
+                Some(&filter),
+            );
             begin = end;
         }
     }
@@ -687,7 +650,11 @@ mod tests {
                 &mut raw_bridge,
             );
             assert!(res.is_ok());
-            verify_nullable_result(&result_row_range_set, &raw_bridge, Some(&non_null_filter));
+            verify_rle_bp_float32_nullable_result(
+                &result_row_range_set,
+                &raw_bridge,
+                Some(&non_null_filter),
+            );
             begin = end;
         }
     }
@@ -743,7 +710,11 @@ mod tests {
                 &mut raw_bridge,
             );
             assert!(res.is_ok());
-            verify_nullable_result(&result_row_range_set, &raw_bridge, Some(&nullable_filter));
+            verify_rle_bp_float32_nullable_result(
+                &result_row_range_set,
+                &raw_bridge,
+                Some(&nullable_filter),
+            );
             begin = end;
         }
     }
@@ -793,7 +764,7 @@ mod tests {
             let mut raw_bridge = Float32Bridge::new(false, capacity);
             let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
             assert!(res.is_ok());
-            verify_non_null_result(&result_row_range_set, &raw_bridge, None);
+            verify_rle_bp_float32_non_null_result(&result_row_range_set, &raw_bridge, None);
             begin = end;
         }
     }
@@ -843,7 +814,7 @@ mod tests {
             let mut raw_bridge = Float32Bridge::new(true, capacity);
             let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
             assert!(res.is_ok());
-            verify_nullable_result(&result_row_range_set, &raw_bridge, None);
+            verify_rle_bp_float32_nullable_result(&result_row_range_set, &raw_bridge, None);
             begin = end;
         }
     }
@@ -899,7 +870,11 @@ mod tests {
                 &mut raw_bridge,
             );
             assert!(res.is_ok());
-            verify_non_null_result(&result_row_range_set, &raw_bridge, Some(&filter));
+            verify_rle_bp_float32_non_null_result(
+                &result_row_range_set,
+                &raw_bridge,
+                Some(&filter),
+            );
             begin = end;
         }
     }
@@ -960,7 +935,11 @@ mod tests {
                 &mut raw_bridge,
             );
             assert!(res.is_ok());
-            verify_nullable_result(&result_row_range_set, &raw_bridge, Some(&non_null_filter));
+            verify_rle_bp_float32_nullable_result(
+                &result_row_range_set,
+                &raw_bridge,
+                Some(&non_null_filter),
+            );
             begin = end;
         }
     }
@@ -1021,7 +1000,11 @@ mod tests {
                 &mut raw_bridge,
             );
             assert!(res.is_ok());
-            verify_nullable_result(&result_row_range_set, &raw_bridge, Some(&nullable_filter));
+            verify_rle_bp_float32_nullable_result(
+                &result_row_range_set,
+                &raw_bridge,
+                Some(&nullable_filter),
+            );
             begin = end;
         }
     }
@@ -1070,7 +1053,7 @@ mod tests {
                         data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
                     assert!(res.is_ok());
 
-                    verify_non_null_result(&result_row_range_set, &raw_bridge, None);
+                    verify_rle_bp_float32_non_null_result(&result_row_range_set, &raw_bridge, None);
                     begin = end;
                     end = min(end + step, 1200);
                 }
@@ -1122,7 +1105,7 @@ mod tests {
                         data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
                     assert!(res.is_ok());
 
-                    verify_nullable_result(&result_row_range_set, &raw_bridge, None);
+                    verify_rle_bp_float32_nullable_result(&result_row_range_set, &raw_bridge, None);
                     begin = end;
                     end = min(end + step, 1200);
                 }
@@ -1166,6 +1149,6 @@ mod tests {
         let mut raw_bridge = Float32Bridge::new(false, capacity);
         let res = data_page.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
         assert!(res.is_ok());
-        verify_non_null_result(&result_row_range_set, &raw_bridge, None);
+        verify_rle_bp_float32_non_null_result(&result_row_range_set, &raw_bridge, None);
     }
 }

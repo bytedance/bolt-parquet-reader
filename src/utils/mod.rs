@@ -24,3 +24,4 @@ pub mod macros;
 pub mod rep_def_parser;
 pub mod row_range_set;
 pub mod shared_memory_buffer;
+pub mod test_utils;

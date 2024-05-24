@@ -58,6 +58,7 @@ pub struct PrimitiveColumnReader<'a> {
     max_rep: u32,
     max_def: u32,
     column_size: usize,
+    column_name: String,
     buffer: BufferEnum<'a>,
     dictionary_page: Option<Rc<DictionaryPageEnum>>,
     current_data_page_header: Option<PageHeader>,
@@ -78,12 +79,20 @@ impl<'a> std::fmt::Display for PrimitiveColumnReader<'a> {
 }
 
 impl<'a> ColumnReaderNew for PrimitiveColumnReader<'a> {
+    fn get_physical_type(&self) -> &PhysicalDataType {
+        &self.physical_data_type
+    }
+
     fn get_column_num_values(&self) -> usize {
         self.num_values
     }
 
     fn get_data_type_size(&self) -> usize {
         self.type_size
+    }
+
+    fn get_column_name(&self) -> &String {
+        &self.column_name
     }
 
     fn read(
@@ -250,6 +259,7 @@ impl<'a> PrimitiveColumnReader<'a> {
     pub fn new(
         max_rep: u32,
         max_def: u32,
+        column_name: String,
         buffer: BufferEnum<'a>,
         filter: Option<&'a dyn FixedLengthRangeFilter>,
     ) -> Result<PrimitiveColumnReader<'a>, BoltReaderError> {
@@ -263,6 +273,7 @@ impl<'a> PrimitiveColumnReader<'a> {
             max_rep,
             max_def,
             column_size: 0,
+            column_name,
             buffer,
             dictionary_page: None,
             current_data_page_header: Option::None,
@@ -307,6 +318,7 @@ impl<'a> PrimitiveColumnReader<'a> {
         match column_meta_data.dictionary_page_offset {
             None => None,
             Some(_) => {
+                let rpos = self.buffer.get_rpos();
                 let first_page_header = read_page_header(&mut self.buffer)?;
                 if first_page_header.dictionary_page_header.is_some() {
                     self.dictionary_page = match self.physical_data_type {
@@ -381,6 +393,8 @@ impl<'a> PrimitiveColumnReader<'a> {
 
                         _ => None,
                     };
+                } else {
+                    self.buffer.set_rpos(rpos);
                 }
                 Some(())
             }
@@ -612,6 +626,11 @@ mod tests {
     use crate::utils::file_streaming_byte_buffer::{FileStreamingBuffer, StreamingByteBuffer};
     use crate::utils::local_file_loader::LocalFileLoader;
     use crate::utils::row_range_set::{RowRange, RowRangeSet};
+    use crate::utils::test_utils::test_utils::{
+        verify_plain_float64_non_null_result, verify_plain_float64_nullable_result,
+        verify_plain_int64_non_null_result, verify_rle_bp_float64_nullable_result,
+        verify_rle_bp_int64_non_null_result,
+    };
 
     const STEAMING_BUFFER_SIZE: usize = 1 << 8;
 
@@ -657,123 +676,11 @@ mod tests {
         let footer = load_file_metadata(&path);
 
         let column_meta_data = &footer.row_groups[0].columns[0].meta_data.as_ref().unwrap();
-        let mut column_reader = PrimitiveColumnReader::new(0, 1, buffer, filter)?;
+        let mut column_reader =
+            PrimitiveColumnReader::new(0, 1, String::from("col1"), buffer, filter)?;
         column_reader.prepare_column_reader(column_meta_data)?;
 
         Ok(column_reader)
-    }
-
-    fn verify_plain_int64_non_null_result(
-        result_row_range_set: &RowRangeSet,
-        raw_bridge: &dyn ResultBridge,
-        filter: Option<&dyn FixedLengthRangeFilter>,
-    ) {
-        let offset = result_row_range_set.get_offset();
-        for row_range in result_row_range_set.get_row_ranges() {
-            for i in row_range.begin..row_range.end {
-                let (validity, value) = raw_bridge
-                    .get_int64_validity_and_value(offset, i, &result_row_range_set)
-                    .unwrap();
-
-                assert_eq!(validity, true);
-                assert_eq!(i as i64, value);
-
-                if let Some(filter) = filter {
-                    assert!(filter.check_i64(value));
-                }
-            }
-        }
-    }
-
-    fn verify_plain_float64_non_null_result(
-        result_row_range_set: &RowRangeSet,
-        raw_bridge: &dyn ResultBridge,
-        filter: Option<&dyn FixedLengthRangeFilter>,
-    ) {
-        let offset = result_row_range_set.get_offset();
-        for row_range in result_row_range_set.get_row_ranges() {
-            for i in row_range.begin..row_range.end {
-                let (validity, value) = raw_bridge
-                    .get_float64_validity_and_value(offset, i, &result_row_range_set)
-                    .unwrap();
-
-                assert_eq!(validity, true);
-                assert_eq!(i as f64, value);
-
-                if let Some(filter) = filter {
-                    assert!(filter.check_f64(value));
-                }
-            }
-        }
-    }
-
-    fn verify_plain_float64_nullable_result(
-        result_row_range_set: &RowRangeSet,
-        raw_bridge: &dyn ResultBridge,
-        filter: Option<&dyn FixedLengthRangeFilter>,
-    ) {
-        let offset = result_row_range_set.get_offset();
-        for row_range in result_row_range_set.get_row_ranges() {
-            for i in row_range.begin..row_range.end {
-                let (validity, value) = raw_bridge
-                    .get_float64_validity_and_value(offset, i, &result_row_range_set)
-                    .unwrap();
-
-                if i % 5 == 0 || i % 17 == 0 {
-                    assert_eq!(validity, false);
-                } else {
-                    assert_eq!(validity, true);
-                    assert_eq!(i as f64, value);
-                }
-                if let Some(filter) = filter {
-                    assert!(filter.check_f64(value));
-                }
-            }
-        }
-    }
-
-    fn verify_rle_bp_bigint_non_null_result(
-        result_row_range_set: &RowRangeSet,
-        raw_bridge: &dyn ResultBridge,
-        filter: Option<&dyn FixedLengthRangeFilter>,
-    ) {
-        let offset = result_row_range_set.get_offset();
-        for row_range in result_row_range_set.get_row_ranges() {
-            for i in row_range.begin..row_range.end {
-                assert_eq!(
-                    raw_bridge
-                        .get_int64_validity_and_value(offset, i, &result_row_range_set)
-                        .unwrap(),
-                    (true, (i % 1000) as i64)
-                );
-                if let Some(filter) = filter {
-                    assert!(filter.check_i64((i % 1000) as i64));
-                }
-            }
-        }
-    }
-
-    fn verify_rle_bp_float64_nullable_result(
-        result_row_range_set: &RowRangeSet,
-        raw_bridge: &dyn ResultBridge,
-        filter: Option<&dyn FixedLengthRangeFilter>,
-    ) {
-        let offset = result_row_range_set.get_offset();
-        for row_range in result_row_range_set.get_row_ranges() {
-            for i in row_range.begin..row_range.end {
-                let (validity, value) = raw_bridge
-                    .get_float64_validity_and_value(offset, i, &result_row_range_set)
-                    .unwrap();
-                if i % 5 == 0 || i % 17 == 0 {
-                    assert_eq!(validity, false);
-                } else {
-                    assert_eq!((validity, value), (true, (i % 1000) as f64));
-                }
-                if let Some(filter) = filter {
-                    assert!(filter.check_f64_with_validity(value, validity));
-                }
-            }
-        }
     }
 
     #[test]
@@ -1585,7 +1492,7 @@ mod tests {
                 let res =
                     column_reader.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
                 assert!(res.is_ok());
-                verify_rle_bp_bigint_non_null_result(&result_row_range_set, &raw_bridge, None);
+                verify_rle_bp_int64_non_null_result(&result_row_range_set, &raw_bridge, None);
 
                 begin = end;
             }
@@ -1623,7 +1530,7 @@ mod tests {
                         &mut raw_bridge,
                     );
                     assert!(res.is_ok());
-                    verify_rle_bp_bigint_non_null_result(&result_row_range_set, &raw_bridge, None);
+                    verify_rle_bp_int64_non_null_result(&result_row_range_set, &raw_bridge, None);
 
                     begin = end;
                 }
@@ -1662,7 +1569,7 @@ mod tests {
                 let res =
                     column_reader.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
                 assert!(res.is_ok());
-                verify_rle_bp_bigint_non_null_result(&result_row_range_set, &raw_bridge, None);
+                verify_rle_bp_int64_non_null_result(&result_row_range_set, &raw_bridge, None);
 
                 begin = end;
             }
@@ -1707,7 +1614,7 @@ mod tests {
                     );
                     assert!(res.is_ok());
 
-                    verify_rle_bp_bigint_non_null_result(&result_row_range_set, &raw_bridge, None);
+                    verify_rle_bp_int64_non_null_result(&result_row_range_set, &raw_bridge, None);
 
                     begin = end;
                 }
