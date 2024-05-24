@@ -127,9 +127,11 @@ impl<'a> DataPageNew for BooleanDataPageReaderV1<'a> {
             let end_byte = end / 8;
             let end_bit = end % 8;
 
-            for i in start_bit..8 {
-                result_bridge
-                    .append_non_null_bool_result((self.data[start_byte] & (1 << i)) != 0)?;
+            if start_byte < end_byte {
+                for i in start_bit..8 {
+                    result_bridge
+                        .append_non_null_bool_result((self.data[start_byte] & (1 << i)) != 0)?;
+                }
             }
 
             // This is to read 8 bits within a byte
@@ -330,18 +332,19 @@ impl<'a> BooleanDataPageReaderV1<'a> {
 
         let mut generator = RowRangeSetGenerator::new(result_row_range_set);
         let mut index = start;
-        for i in start_bit..8 {
-            index = self.read_bit_with_filter(
-                self.data[start_byte],
-                index,
-                i,
-                filter,
-                index + self.current_offset - offset,
-                &mut generator,
-                result_bridge,
-            )?;
+        if start_byte < end_byte {
+            for i in start_bit..8 {
+                index = self.read_bit_with_filter(
+                    self.data[start_byte],
+                    index,
+                    i,
+                    filter,
+                    index + self.current_offset - offset,
+                    &mut generator,
+                    result_bridge,
+                )?;
+            }
         }
-
         // This is to read 8 bits within a byte
         for i in start_byte + 1..end_byte {
             index = self.read_bit_with_filter(
