@@ -18,13 +18,13 @@ use std::intrinsics::unlikely;
 use std::rc::Rc;
 
 use crate::bridge::result_bridge::ResultBridge;
-use crate::column_reader::column_reader_base::{ColumnReaderNew, PhysicalDataType};
+use crate::column_reader::column_reader_base::{ColumnReader, PhysicalDataType};
 use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
 use crate::metadata::page_header::read_page_header;
 use crate::metadata::parquet_metadata_thrift::{ColumnMetaData, Encoding, PageHeader, Type};
 use crate::page_reader::data_page_v1::boolean_data_page_v1::BooleanDataPageReaderV1;
 use crate::page_reader::data_page_v1::data_page_base::{
-    get_data_page_covered_range, get_data_page_remaining_range, DataPageEnum, DataPageNew,
+    get_data_page_covered_range, get_data_page_remaining_range, DataPage, DataPageEnum,
 };
 use crate::page_reader::data_page_v1::plain_data_page_float32_v1::PlainDataPageReaderFloat32V1;
 use crate::page_reader::data_page_v1::plain_data_page_float64_v1::PlainDataPageReaderFloat64V1;
@@ -78,7 +78,7 @@ impl<'a> std::fmt::Display for PrimitiveColumnReader<'a> {
     }
 }
 
-impl<'a> ColumnReaderNew for PrimitiveColumnReader<'a> {
+impl<'a> ColumnReader for PrimitiveColumnReader<'a> {
     fn get_physical_type(&self) -> &PhysicalDataType {
         &self.physical_data_type
     }
@@ -627,7 +627,7 @@ mod tests {
     use crate::bridge::float64_bridge::Float64Bridge;
     use crate::bridge::int64_bridge::Int64Bridge;
     use crate::bridge::result_bridge::ResultBridge;
-    use crate::column_reader::column_reader_base::ColumnReaderNew;
+    use crate::column_reader::column_reader_base::ColumnReader;
     use crate::column_reader::primitive_column_reader::PrimitiveColumnReader;
     use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
     use crate::filters::float_point_range_filter::FloatPointRangeFilter;

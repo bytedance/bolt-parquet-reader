@@ -24,7 +24,7 @@ use crate::bridge::float64_bridge::Float64Bridge;
 use crate::bridge::int32_bridge::Int32Bridge;
 use crate::bridge::int64_bridge::Int64Bridge;
 use crate::bridge::result_bridge::{ResultBridge, ResultBridgeEnum};
-use crate::column_reader::column_reader_base::{ColumnReaderNew, PhysicalDataType};
+use crate::column_reader::column_reader_base::{ColumnReader, PhysicalDataType};
 use crate::column_reader::primitive_column_reader::PrimitiveColumnReader;
 use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
 use crate::metadata::parquet_metadata_thrift::RowGroup;
