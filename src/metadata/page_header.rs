@@ -33,8 +33,11 @@ pub fn read_page_header(buffer: &mut dyn ByteBufferBase) -> Result<PageHeader, B
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use crate::metadata::page_header::read_page_header;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
+    use crate::utils::file_loader::FileLoaderEnum;
     use crate::utils::file_streaming_byte_buffer::{FileStreamingBuffer, StreamingByteBuffer};
     use crate::utils::local_file_loader::LocalFileLoader;
 
@@ -43,21 +46,20 @@ mod tests {
         let path = String::from("src/sample_files/lineitem.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-
-        let res = DirectByteBuffer::from_file(&file, 4, 100);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, 100);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let page_header = read_page_header(&mut buf);
         assert!(page_header.is_ok());
 
-        let res = StreamingByteBuffer::from_file(&file, 4, 100, 3);
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, 100, 3);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let page_header = read_page_header(&mut buf);
         assert!(page_header.is_ok());
 
-        let res = StreamingByteBuffer::from_file(&file, 4, 100, 7);
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, 100, 7);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let page_header = read_page_header(&mut buf);
@@ -69,21 +71,21 @@ mod tests {
         let path = String::from("src/sample_files/lineitem.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
 
-        let res = DirectByteBuffer::from_file(&file, 4, 50);
+        let res = DirectByteBuffer::from_file(file.clone(), 4, 50);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let page_header = read_page_header(&mut buf);
         assert!(page_header.is_err());
 
-        let res = StreamingByteBuffer::from_file(&file, 4, 50, 3);
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, 50, 3);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let page_header = read_page_header(&mut buf);
         assert!(page_header.is_err());
 
-        let res = StreamingByteBuffer::from_file(&file, 4, 50, 7);
+        let res = StreamingByteBuffer::from_file(file.clone(), 4, 50, 7);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let page_header = read_page_header(&mut buf);
@@ -95,21 +97,21 @@ mod tests {
         let path = String::from("src/sample_files/lineitem.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
 
-        let res = DirectByteBuffer::from_file(&file, 8, 100);
+        let res = DirectByteBuffer::from_file(file.clone(), 8, 100);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let page_header = read_page_header(&mut buf);
         assert!(page_header.is_err());
 
-        let res = StreamingByteBuffer::from_file(&file, 8, 100, 3);
+        let res = StreamingByteBuffer::from_file(file.clone(), 8, 100, 3);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let page_header = read_page_header(&mut buf);
         assert!(page_header.is_err());
 
-        let res = StreamingByteBuffer::from_file(&file, 8, 100, 7);
+        let res = StreamingByteBuffer::from_file(file.clone(), 8, 100, 7);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
         let page_header = read_page_header(&mut buf);

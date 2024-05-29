@@ -21,7 +21,7 @@ use bytebuffer::Endian::LittleEndian;
 
 use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
 use crate::utils::exceptions::BoltReaderError;
-use crate::utils::file_loader::LoadFile;
+use crate::utils::file_loader::FileLoader;
 
 pub struct LocalFileLoader {
     path: String,
@@ -39,7 +39,7 @@ impl std::fmt::Display for LocalFileLoader {
     }
 }
 
-impl LoadFile for LocalFileLoader {
+impl FileLoader for LocalFileLoader {
     fn get_file_path(&self) -> &String {
         &self.path
     }
@@ -96,8 +96,10 @@ impl LocalFileLoader {
 mod tests {
     extern crate bytebuffer;
 
+    use std::rc::Rc;
+
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
-    use crate::utils::file_loader::LoadFile;
+    use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
     use crate::utils::local_file_loader::LocalFileLoader;
 
     #[test]
@@ -109,17 +111,17 @@ mod tests {
         let path = String::from("src/sample_files/lineitem.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
         assert_eq!(file.get_file_size(), 2065982);
         assert_eq!(file.get_file_path(), "src/sample_files/lineitem.parquet");
 
-        let res = DirectByteBuffer::from_file(&file, 0, 4);
+        let res = DirectByteBuffer::from_file(file.clone(), 0, 4);
         assert!(res.is_ok());
         let buffer = res.unwrap();
         assert_eq!(buffer.len(), 4);
         assert_eq!(buffer.as_bytes(), vec![80, 65, 82, 49]);
 
-        let res = DirectByteBuffer::from_file(&file, file.get_file_size() - 4, 4);
+        let res = DirectByteBuffer::from_file(file.clone(), file.get_file_size() - 4, 4);
         assert!(res.is_ok());
         let buffer = res.unwrap();
         assert_eq!(buffer.len(), 4);
@@ -131,21 +133,21 @@ mod tests {
         let path = String::from("src/sample_files/lineitem.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 0, 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 0, 4);
 
         assert!(res.is_ok());
         let buffer = res.unwrap();
         assert_eq!(buffer.len(), 4);
         assert_eq!(buffer.as_bytes(), vec![80, 65, 82, 49]);
 
-        let res = DirectByteBuffer::from_file(&file, file.get_file_size() - 4, 4);
+        let res = DirectByteBuffer::from_file(file.clone(), file.get_file_size() - 4, 4);
         assert!(res.is_ok());
         let buffer = res.unwrap();
         assert_eq!(buffer.len(), 4);
         assert_eq!(buffer.as_bytes(), vec![80, 65, 82, 49]);
 
-        let res = DirectByteBuffer::from_file(&file, file.get_file_size(), 1);
+        let res = DirectByteBuffer::from_file(file.clone(), file.get_file_size(), 1);
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().to_string(), "Internal Error: Reading range exceeds the file size: 2065982 bytes. \nReading range [2065982, 2065983) \n");
     }

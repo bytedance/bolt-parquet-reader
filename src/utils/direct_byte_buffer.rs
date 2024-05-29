@@ -14,12 +14,13 @@
 // limitations under the License.
 
 use std::mem;
+use std::rc::Rc;
 
 use bytebuffer::ByteBuffer;
 
 use crate::utils::byte_buffer_base::ByteBufferBase;
 use crate::utils::exceptions::BoltReaderError;
-use crate::utils::file_loader::LoadFile;
+use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
 
 // Currently, we use 1GB as the max capacity.
 // todo: Create config module to handle the default const values.
@@ -41,7 +42,7 @@ pub trait Buffer {
     }
 
     fn from_file(
-        source: &dyn LoadFile,
+        source: Rc<FileLoaderEnum>,
         offset: usize,
         length: usize,
     ) -> Result<DirectByteBuffer, BoltReaderError>;
@@ -70,7 +71,7 @@ pub trait Buffer {
 
 impl Buffer for DirectByteBuffer {
     fn from_file(
-        source: &dyn LoadFile,
+        source: Rc<FileLoaderEnum>,
         offset: usize,
         length: usize,
     ) -> Result<DirectByteBuffer, BoltReaderError> {

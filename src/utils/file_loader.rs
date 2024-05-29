@@ -15,8 +15,13 @@
 
 use crate::utils::direct_byte_buffer::DirectByteBuffer;
 use crate::utils::exceptions::BoltReaderError;
+use crate::utils::local_file_loader::LocalFileLoader;
 
-pub trait LoadFile {
+pub enum FileLoaderEnum {
+    LocalFileLoader(LocalFileLoader),
+}
+
+pub trait FileLoader {
     fn get_file_path(&self) -> &String;
 
     fn get_file_size(&self) -> usize;
@@ -32,4 +37,40 @@ pub trait LoadFile {
         offset: usize,
         length: usize,
     ) -> Result<DirectByteBuffer, BoltReaderError>;
+}
+
+impl FileLoader for FileLoaderEnum {
+    fn get_file_path(&self) -> &String {
+        match self {
+            FileLoaderEnum::LocalFileLoader(loader) => loader.get_file_path(),
+        }
+    }
+
+    fn get_file_size(&self) -> usize {
+        match self {
+            FileLoaderEnum::LocalFileLoader(loader) => loader.get_file_size(),
+        }
+    }
+
+    fn load_file_to_raw_buffer(
+        &self,
+        offset: usize,
+        length: usize,
+    ) -> Result<Vec<u8>, BoltReaderError> {
+        match self {
+            FileLoaderEnum::LocalFileLoader(loader) => {
+                loader.load_file_to_raw_buffer(offset, length)
+            }
+        }
+    }
+
+    fn load_file_to_buffer(
+        &self,
+        offset: usize,
+        length: usize,
+    ) -> Result<DirectByteBuffer, BoltReaderError> {
+        match self {
+            FileLoaderEnum::LocalFileLoader(loader) => loader.load_file_to_buffer(offset, length),
+        }
+    }
 }

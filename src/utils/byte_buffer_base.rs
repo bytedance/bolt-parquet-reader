@@ -22,13 +22,13 @@ use crate::utils::exceptions::BoltReaderError;
 use crate::utils::file_streaming_byte_buffer::StreamingByteBuffer;
 use crate::utils::shared_memory_buffer::SharedMemoryBuffer;
 
-pub enum BufferEnum<'a> {
+pub enum BufferEnum {
     DirectByteBuffer(DirectByteBuffer),
-    StreamingByteBuffer(StreamingByteBuffer<'a>),
+    StreamingByteBuffer(StreamingByteBuffer),
     SharedMemoryBuffer(SharedMemoryBuffer),
 }
 
-impl Read for BufferEnum<'_> {
+impl Read for BufferEnum {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => buffer.read(buf),
@@ -38,7 +38,7 @@ impl Read for BufferEnum<'_> {
     }
 }
 
-impl ByteBufferBase for BufferEnum<'_> {
+impl ByteBufferBase for BufferEnum {
     fn can_create_buffer_slice(&self, start: usize, len: usize) -> bool {
         match self {
             BufferEnum::DirectByteBuffer(buffer) => buffer.can_create_buffer_slice(start, len),

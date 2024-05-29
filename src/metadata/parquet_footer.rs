@@ -15,6 +15,7 @@
 
 use std::cmp::min;
 use std::fmt::Formatter;
+use std::rc::Rc;
 
 use thrift::protocol::{TCompactInputProtocol, TSerializable};
 
@@ -22,7 +23,7 @@ use crate::metadata::parquet_metadata_thrift::FileMetaData;
 use crate::utils::byte_buffer_base::ByteBufferBase;
 use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
 use crate::utils::exceptions::BoltReaderError;
-use crate::utils::file_loader::LoadFile;
+use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
 use crate::utils::local_file_loader::LocalFileLoader;
 
 const PARQUET_MAGIC_CODE: [u8; 4] = [b'P', b'A', b'R', b'1'];
@@ -32,7 +33,7 @@ const PARQUET_FOOTER_BUFFER_LENGTH: usize = 4;
 // Currently, FileMetaDataLoader only has the LocalFileLoader member.
 // TODO: Add cached file footer
 pub struct FileMetaDataLoader {
-    file: LocalFileLoader,
+    file: Rc<FileLoaderEnum>,
     footer_preload_size: usize,
     actual_footer_size: Option<usize>,
 }
@@ -69,7 +70,7 @@ impl FileMetaDataLoader {
         }
 
         Ok(FileMetaDataLoader {
-            file,
+            file: Rc::from(FileLoaderEnum::LocalFileLoader(file)),
             footer_preload_size,
             actual_footer_size: None,
         })
@@ -131,7 +132,7 @@ impl FileMetaDataLoader {
         let preload_size = min(size, self.footer_preload_size);
 
         let mut buffer =
-            DirectByteBuffer::from_file(&self.file, size - preload_size, preload_size)?;
+            DirectByteBuffer::from_file(self.file.clone(), size - preload_size, preload_size)?;
 
         self.verify_footer_magic(&buffer, preload_size - PARQUET_MAGIC_CODE_LENGTH)?;
         let actual_footer_size = self.read_footer_size(
@@ -148,7 +149,7 @@ impl FileMetaDataLoader {
             > preload_size - PARQUET_FOOTER_BUFFER_LENGTH - PARQUET_MAGIC_CODE_LENGTH
         {
             buffer = DirectByteBuffer::from_file(
-                &self.file,
+                self.file.clone(),
                 size - actual_footer_size
                     - PARQUET_FOOTER_BUFFER_LENGTH
                     - PARQUET_MAGIC_CODE_LENGTH,

@@ -332,7 +332,7 @@ mod tests {
     use crate::utils::byte_buffer_base::ByteBufferBase;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
-    use crate::utils::file_loader::LoadFile;
+    use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
     use crate::utils::file_streaming_byte_buffer::{FileStreamingBuffer, StreamingByteBuffer};
     use crate::utils::local_file_loader::LocalFileLoader;
     use crate::utils::rep_def_parser::RepDefParser;
@@ -420,8 +420,8 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
 
@@ -438,8 +438,8 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
 
@@ -456,8 +456,8 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
 
@@ -501,8 +501,8 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
 
@@ -546,8 +546,8 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
 
@@ -601,8 +601,8 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
 
@@ -661,8 +661,8 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
 
@@ -721,9 +721,9 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
         let res = StreamingByteBuffer::from_file(
-            &file,
+            file.clone(),
             4,
             file.get_file_size() - 4,
             STEAMING_BUFFER_SIZE,
@@ -771,9 +771,9 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
         let res = StreamingByteBuffer::from_file(
-            &file,
+            file.clone(),
             4,
             file.get_file_size() - 4,
             STEAMING_BUFFER_SIZE,
@@ -821,9 +821,9 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
         let res = StreamingByteBuffer::from_file(
-            &file,
+            file.clone(),
             4,
             file.get_file_size() - 4,
             STEAMING_BUFFER_SIZE,
@@ -881,9 +881,9 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
         let res = StreamingByteBuffer::from_file(
-            &file,
+            file.clone(),
             4,
             file.get_file_size() - 4,
             STEAMING_BUFFER_SIZE,
@@ -946,9 +946,9 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column_with_nulls.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
         let res = StreamingByteBuffer::from_file(
-            &file,
+            file.clone(),
             4,
             file.get_file_size() - 4,
             STEAMING_BUFFER_SIZE,
@@ -1018,8 +1018,8 @@ mod tests {
                 let mut end = begin + step;
                 let res = LocalFileLoader::new(&path);
                 assert!(res.is_ok());
-                let file = res.unwrap();
-                let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+                let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+                let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
                 assert!(res.is_ok());
                 let mut buf = res.unwrap();
 
@@ -1070,8 +1070,8 @@ mod tests {
                 let mut end = begin + step;
                 let res = LocalFileLoader::new(&path);
                 assert!(res.is_ok());
-                let file = res.unwrap();
-                let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+                let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+                let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
                 assert!(res.is_ok());
                 let mut buf = res.unwrap();
 
@@ -1115,8 +1115,8 @@ mod tests {
         let path = String::from("src/sample_files/rle_bp_double_column.parquet");
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-        let res = DirectByteBuffer::from_file(&file, 4, file.get_file_size() - 4);
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 4, file.get_file_size() - 4);
         assert!(res.is_ok());
         let mut buf = res.unwrap();
 

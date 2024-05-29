@@ -267,7 +267,7 @@ mod tests {
     use crate::metadata::parquet_metadata_thrift::FileMetaData;
     use crate::metadata::utils::prepare_schema;
     use crate::utils::exceptions::BoltReaderError;
-    use crate::utils::file_loader::LoadFile;
+    use crate::utils::file_loader::FileLoader;
     use crate::utils::local_file_loader::LocalFileLoader;
     use crate::utils::row_range_set::RowRangeSet;
     use crate::utils::shared_memory_buffer::SharedMemoryBuffer;

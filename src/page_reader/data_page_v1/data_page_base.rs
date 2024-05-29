@@ -313,6 +313,7 @@ pub fn get_data_page_remaining_range(
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
 
     use crate::metadata::page_header::read_page_header;
     use crate::page_reader::data_page_v1::data_page_base::{
@@ -321,7 +322,7 @@ mod tests {
     use crate::page_reader::data_page_v1::plain_data_page_int64_v1::PlainDataPageReaderInt64V1;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
-    use crate::utils::file_loader::LoadFile;
+    use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
     use crate::utils::local_file_loader::LocalFileLoader;
     use crate::utils::row_range_set::RowRange;
 
@@ -334,9 +335,8 @@ mod tests {
     ) {
         let res = LocalFileLoader::new(&path);
         assert!(res.is_ok());
-        let file = res.unwrap();
-
-        let res = DirectByteBuffer::from_file(&file, 0, file.get_file_size());
+        let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+        let res = DirectByteBuffer::from_file(file.clone(), 0, file.get_file_size());
 
         assert!(res.is_ok());
         let mut buf = res.unwrap();
