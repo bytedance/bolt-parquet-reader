@@ -20,7 +20,7 @@ use std::mem;
 use crate::metadata::parquet_metadata_thrift;
 use crate::metadata::parquet_metadata_thrift::PageHeader;
 use crate::page_reader::dictionary_page::dictionary_page_base::DictionaryPageNew;
-use crate::utils::byte_buffer_base::ByteBufferBase;
+use crate::utils::byte_buffer_base::{BufferEnum, ByteBufferBase};
 use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
 use crate::utils::exceptions::BoltReaderError;
 
@@ -30,6 +30,8 @@ pub struct DictionaryPageFloat32 {
     type_size: usize,
     #[allow(dead_code)]
     zero_copy: bool,
+    #[allow(dead_code)]
+    buffer_enum: BufferEnum,
     dictionary: Vec<f32>,
 }
 
@@ -87,7 +89,15 @@ impl DictionaryPageFloat32 {
         page_header: &PageHeader,
         buffer: &mut dyn ByteBufferBase,
         type_size: usize,
+        as_reference: bool,
+        mut buffer_enum: BufferEnum,
     ) -> Result<DictionaryPageFloat32, BoltReaderError> {
+        let buffer = if as_reference {
+            buffer
+        } else {
+            &mut buffer_enum
+        };
+
         let header = match &page_header.dictionary_page_header {
             Some(dictionary_header) => dictionary_header,
             None => {
@@ -138,6 +148,7 @@ impl DictionaryPageFloat32 {
             sorted: header.is_sorted.unwrap_or(false),
             type_size,
             zero_copy,
+            buffer_enum,
             dictionary,
         })
     }
@@ -150,7 +161,7 @@ mod tests {
     use crate::metadata::page_header::read_page_header;
     use crate::page_reader::dictionary_page::dictionary_page_base::DictionaryPageNew;
     use crate::page_reader::dictionary_page::dictionary_page_float32::DictionaryPageFloat32;
-    use crate::utils::byte_buffer_base::ByteBufferBase;
+    use crate::utils::byte_buffer_base::{BufferEnum, ByteBufferBase};
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
     use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
@@ -164,7 +175,13 @@ mod tests {
         assert!(res.is_ok());
         let page_header = res.unwrap();
 
-        DictionaryPageFloat32::new(&page_header, buf, 4)
+        DictionaryPageFloat32::new(
+            &page_header,
+            buf,
+            4,
+            true,
+            BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+        )
     }
 
     #[test]

@@ -21,7 +21,7 @@ use crate::filters::fixed_length_filter::FixedLengthRangeFilter;
 use crate::metadata::parquet_metadata_thrift;
 use crate::metadata::parquet_metadata_thrift::PageHeader;
 use crate::page_reader::data_page_v1::data_page_base::DataPage;
-use crate::utils::byte_buffer_base::ByteBufferBase;
+use crate::utils::byte_buffer_base::{BufferEnum, ByteBufferBase};
 use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
 use crate::utils::exceptions::BoltReaderError;
 use crate::utils::row_range_set::{RowRange, RowRangeSet, RowRangeSetGenerator};
@@ -35,6 +35,8 @@ pub struct BooleanDataPageReaderV1<'a> {
     zero_copy: bool,
     non_null_index: usize,
     nullable_index: usize,
+    #[allow(dead_code)]
+    buffer_enum: BufferEnum,
     filter: Option<&'a dyn FixedLengthRangeFilter>,
     #[allow(dead_code)]
     validity: Option<Vec<bool>>,
@@ -179,9 +181,17 @@ impl<'a> BooleanDataPageReaderV1<'a> {
         type_size: usize,
         has_null: bool,
         data_size: usize,
+        as_reference: bool,
+        mut buffer_enum: BufferEnum,
         filter: Option<&'a (dyn FixedLengthRangeFilter + 'a)>,
         validity: Option<Vec<bool>>,
     ) -> Result<BooleanDataPageReaderV1<'a>, BoltReaderError> {
+        let buffer = if as_reference {
+            buffer
+        } else {
+            &mut buffer_enum
+        };
+
         let header = match &page_header.data_page_header {
             Some(data_page_v1) => data_page_v1,
             None => {
@@ -238,6 +248,7 @@ impl<'a> BooleanDataPageReaderV1<'a> {
             zero_copy,
             non_null_index: 0,
             nullable_index: 0,
+            buffer_enum,
             filter,
             validity,
             data,
@@ -457,7 +468,7 @@ mod tests {
     use crate::metadata::parquet_metadata_thrift::Encoding;
     use crate::page_reader::data_page_v1::boolean_data_page_v1::BooleanDataPageReaderV1;
     use crate::page_reader::data_page_v1::data_page_base::{get_data_page_covered_range, DataPage};
-    use crate::utils::byte_buffer_base::ByteBufferBase;
+    use crate::utils::byte_buffer_base::{BufferEnum, ByteBufferBase};
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
     use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
@@ -506,6 +517,8 @@ mod tests {
             1,
             validity.0,
             data_size as usize,
+            true,
+            BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
             filter,
             validity.1,
         )

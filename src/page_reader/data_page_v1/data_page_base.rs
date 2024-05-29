@@ -320,6 +320,7 @@ mod tests {
         get_data_page_covered_range, get_data_page_remaining_range, DataPage,
     };
     use crate::page_reader::data_page_v1::plain_data_page_int64_v1::PlainDataPageReaderInt64V1;
+    use crate::utils::byte_buffer_base::BufferEnum;
     use crate::utils::direct_byte_buffer::{Buffer, DirectByteBuffer};
     use crate::utils::exceptions::BoltReaderError;
     use crate::utils::file_loader::{FileLoader, FileLoaderEnum};
@@ -355,6 +356,8 @@ mod tests {
                 8,
                 false,
                 data_size as usize,
+                true,
+                BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
                 None,
                 Option::None,
             ),
