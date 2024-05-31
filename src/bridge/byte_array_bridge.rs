@@ -15,10 +15,9 @@
 
 use std::fmt::Formatter;
 use std::intrinsics::unlikely;
-use std::mem;
 use std::string::String;
 
-use arrow::array::Int64Array;
+use arrow::array::BinaryArray;
 
 use crate::bridge::result_bridge::{BridgeDataType, BridgeType, ResultBridge};
 use crate::utils::exceptions::BoltReaderError;
@@ -28,25 +27,27 @@ use crate::utils::row_range_set::RowRangeSet;
 // todo: Create config module to handle the default const values.
 const DEFAULT_DISPLAY_NUMBER: usize = 10;
 
+pub type ByteArray = Vec<u8>;
+
 #[allow(dead_code)]
-pub struct Int64Bridge {
+pub struct ByteArrayBridge {
     bridge_type: BridgeType,
     bridge_data_type: BridgeDataType,
     may_has_null: bool,
     // If non-null results are added to nullable bridge, the non-null results will be deep copied to nullable results.
-    non_null_data: Vec<i64>,
-    nullable_data: Vec<Option<i64>>,
+    non_null_data: Vec<ByteArray>,
+    nullable_data: Vec<Option<ByteArray>>,
 }
 #[allow(dead_code)]
-impl std::fmt::Display for Int64Bridge {
+impl std::fmt::Display for ByteArrayBridge {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let result_str = if self.may_has_null {
             self.nullable_data
                 .iter()
                 .take(DEFAULT_DISPLAY_NUMBER)
-                .map(|value| match *value {
+                .map(|value| match value {
                     None => String::from("None"),
-                    Some(value) => value.to_string(),
+                    Some(_) => String::from("Byte Array"),
                 })
                 .collect::<Vec<String>>()
                 .join(", ")
@@ -54,7 +55,7 @@ impl std::fmt::Display for Int64Bridge {
             self.non_null_data
                 .iter()
                 .take(DEFAULT_DISPLAY_NUMBER)
-                .map(i64::to_string)
+                .map(|_| String::from("Byte Array"))
                 .collect::<Vec<String>>()
                 .join(", ")
         };
@@ -70,11 +71,11 @@ impl std::fmt::Display for Int64Bridge {
     }
 }
 
-impl Int64Bridge {
-    pub fn new(may_has_null: bool, capacity: usize) -> Int64Bridge {
-        Int64Bridge {
+impl ByteArrayBridge {
+    pub fn new(may_has_null: bool, capacity: usize) -> ByteArrayBridge {
+        ByteArrayBridge {
             bridge_type: BridgeType::RustVec,
-            bridge_data_type: BridgeDataType::Int64,
+            bridge_data_type: BridgeDataType::ByteArray,
             may_has_null,
             non_null_data: Vec::with_capacity(capacity),
             nullable_data: Vec::with_capacity(capacity),
@@ -82,9 +83,9 @@ impl Int64Bridge {
     }
 }
 
-impl ResultBridge for Int64Bridge {
+impl ResultBridge for ByteArrayBridge {
     fn get_bridge_name(&self) -> String {
-        String::from("Int64 Bridge")
+        String::from("Byte Array Bridge")
     }
 
     fn is_empty(&self) -> bool {
@@ -111,27 +112,32 @@ impl ResultBridge for Int64Bridge {
         self.may_has_null = may_has_null;
     }
 
-    fn append_nullable_int64_result(&mut self, result: Option<i64>) -> Result<(), BoltReaderError> {
+    fn append_nullable_byte_array_result(
+        &mut self,
+        result: Option<ByteArray>,
+    ) -> Result<(), BoltReaderError> {
         self.nullable_data.push(result);
 
         Ok(())
     }
 
-    fn append_nullable_int64_results(
+    fn append_nullable_byte_array_results(
         &mut self,
-        result: &[Option<i64>],
+        result: &[Option<ByteArray>],
     ) -> Result<(), BoltReaderError> {
-        let old_length = self.nullable_data.len();
-        let new_length = old_length + result.len();
-        self.nullable_data.resize(new_length, Option::default());
-        self.nullable_data[old_length..new_length].copy_from_slice(result);
+        for byte_array in result {
+            self.nullable_data.push(byte_array.clone());
+        }
 
         Ok(())
     }
 
-    fn append_non_null_int64_result(&mut self, result: i64) -> Result<(), BoltReaderError> {
+    fn append_non_null_byte_array_result(
+        &mut self,
+        result: ByteArray,
+    ) -> Result<(), BoltReaderError> {
         if unlikely(self.may_has_null) {
-            return self.append_nullable_int64_result(Some(result));
+            return self.append_nullable_byte_array_result(Some(result));
         }
 
         self.non_null_data.push(result);
@@ -139,25 +145,29 @@ impl ResultBridge for Int64Bridge {
         Ok(())
     }
 
-    fn append_non_null_int64_results(&mut self, result: &[i64]) -> Result<(), BoltReaderError> {
+    fn append_non_null_byte_array_results(
+        &mut self,
+        result: &[ByteArray],
+    ) -> Result<(), BoltReaderError> {
         if unlikely(self.may_has_null) {
-            let nullable_results: Vec<Option<i64>> = result.iter().map(|&x| Some(x)).collect();
-            return self.append_nullable_int64_results(&nullable_results);
+            for byte_array in result {
+                self.append_nullable_byte_array_result(Some(byte_array.clone()))?;
+            }
+        } else {
+            for byte_array in result {
+                self.append_non_null_byte_array_result(byte_array.clone())?;
+            }
         }
-        let old_length = self.non_null_data.len();
-        let new_length = old_length + result.len();
-        self.non_null_data.resize(new_length, i64::default());
-        self.non_null_data[old_length..new_length].copy_from_slice(result);
 
         Ok(())
     }
 
-    fn get_int64_validity_and_value(
+    fn get_byte_array_validity_and_value(
         &self,
         offset: usize,
         index: usize,
         ranges: &RowRangeSet,
-    ) -> Result<(bool, i64), BoltReaderError> {
+    ) -> Result<(bool, ByteArray), BoltReaderError> {
         if unlikely(self.is_empty()) {
             return Err(BoltReaderError::BridgeError(String::from(
                 "Raw Bridge: Can't retrieve value from empty raw bridge",
@@ -172,13 +182,13 @@ impl ResultBridge for Int64Bridge {
                 let idx = offset + index + base - range.begin - ranges.get_offset();
 
                 if self.may_has_null {
-                    if let Some(value) = self.nullable_data[idx] {
+                    if let Some(value) = self.nullable_data[idx].clone() {
                         return Ok((true, value));
                     } else {
-                        return Ok((false, i64::default()));
+                        return Ok((false, ByteArray::default()));
                     }
                 } else {
-                    return Ok((true, self.non_null_data[idx]));
+                    return Ok((true, self.non_null_data[idx].clone()));
                 }
             }
             base += range.end - range.begin;
@@ -189,11 +199,23 @@ impl ResultBridge for Int64Bridge {
         )))
     }
 
-    fn to_int64_arrow_array(&mut self) -> Result<Int64Array, BoltReaderError> {
+    fn to_byte_array_arrow_array(&mut self) -> Result<BinaryArray, BoltReaderError> {
         if self.may_has_null {
-            Ok(Int64Array::from(mem::take(&mut self.nullable_data)))
+            let values = self
+                .nullable_data
+                .iter()
+                .map(|value| value.as_ref().map(|value| value.as_slice()))
+                .collect::<Vec<Option<&[u8]>>>();
+
+            Ok(BinaryArray::from_opt_vec(values))
         } else {
-            Ok(Int64Array::from(mem::take(&mut self.non_null_data)))
+            let values = self
+                .non_null_data
+                .iter()
+                .map(|value| value.as_slice())
+                .collect::<Vec<&[u8]>>();
+
+            Ok(BinaryArray::from_vec(values))
         }
     }
 
@@ -226,10 +248,10 @@ impl ResultBridge for Int64Bridge {
 
                     if self.may_has_null() {
                         let value_slice = &self.nullable_data[self_start..self_start + other_len];
-                        result_bridge.append_nullable_int64_results(value_slice)?;
+                        result_bridge.append_nullable_byte_array_results(value_slice)?;
                     } else {
                         let value_slice = &self.non_null_data[self_start..self_start + other_len];
-                        result_bridge.append_non_null_int64_results(value_slice)?;
+                        result_bridge.append_non_null_byte_array_results(value_slice)?;
                     }
 
                     break;
@@ -252,7 +274,7 @@ impl ResultBridge for Int64Bridge {
         }
         self.may_has_null = true;
         self.non_null_data.iter().enumerate().for_each(|(_, e)| {
-            self.nullable_data.push(Some(*e));
+            self.nullable_data.push(Some(e.clone()));
         });
         self.non_null_data.clear();
 
@@ -263,67 +285,69 @@ impl ResultBridge for Int64Bridge {
 #[cfg(test)]
 mod tests {
 
-    use crate::bridge::int64_bridge::Int64Bridge;
+    use crate::bridge::byte_array_bridge::{ByteArray, ByteArrayBridge};
     use crate::bridge::result_bridge::bridge_tests_utils::{
         create_random_bool_vec, create_random_bool_vec_sub_set, create_row_range_set,
     };
     use crate::bridge::result_bridge::ResultBridge;
     use crate::utils::row_range_set::RowRangeSet;
 
-    fn get_non_null_int64_value(index: usize) -> i64 {
-        index as i64
+    fn get_non_null_byte_array_value(index: usize) -> ByteArray {
+        index.to_string().into_bytes()
     }
 
-    fn get_nullable_int64_value(index: usize) -> Option<i64> {
+    fn get_nullable_byte_array_value(index: usize) -> Option<ByteArray> {
         if index % 5 == 0 || index % 17 == 0 {
             None
         } else {
-            Some(index as i64)
+            Some(index.to_string().into_bytes())
         }
     }
 
-    fn create_non_null_int64_data(row_range_set: &RowRangeSet) -> Vec<i64> {
-        let mut bool_vec = Vec::new();
+    fn create_non_null_byte_array_data(row_range_set: &RowRangeSet) -> Vec<ByteArray> {
+        let mut byte_array_vec = Vec::new();
 
         let offset = row_range_set.get_offset();
         for row_range in row_range_set.get_row_ranges() {
             for i in row_range.begin..row_range.end {
-                bool_vec.push(get_non_null_int64_value(i + offset));
+                byte_array_vec.push(get_non_null_byte_array_value(i + offset));
             }
         }
 
-        bool_vec
+        byte_array_vec
     }
 
-    fn create_nullable_int64_data(row_range_set: &RowRangeSet) -> Vec<Option<i64>> {
-        let mut bool_vec = Vec::new();
+    fn create_nullable_byte_array_data(row_range_set: &RowRangeSet) -> Vec<Option<ByteArray>> {
+        let mut byte_array_vec = Vec::new();
 
         let offset = row_range_set.get_offset();
         for row_range in row_range_set.get_row_ranges() {
             for i in row_range.begin..row_range.end {
-                bool_vec.push(get_nullable_int64_value(i + offset));
+                byte_array_vec.push(get_nullable_byte_array_value(i + offset));
             }
         }
 
-        bool_vec
+        byte_array_vec
     }
 
-    fn create_int64_bridge(
+    fn create_byte_array_bridge(
         may_has_null: bool,
         capacity: usize,
         row_range_set: &RowRangeSet,
-    ) -> Int64Bridge {
-        let mut bridge: Int64Bridge = Int64Bridge::new(may_has_null, capacity);
+    ) -> ByteArrayBridge {
+        let mut bridge: ByteArrayBridge = ByteArrayBridge::new(may_has_null, capacity);
 
         let offset = row_range_set.get_offset();
         for row_range in row_range_set.get_row_ranges() {
             for i in row_range.begin..row_range.end {
                 if may_has_null {
-                    let _ =
-                        bridge.append_nullable_int64_result(get_nullable_int64_value(i + offset));
+                    let _ = bridge.append_nullable_byte_array_result(
+                        get_nullable_byte_array_value(i + offset),
+                    );
                 } else {
-                    let _ =
-                        bridge.append_non_null_int64_result(get_non_null_int64_value(i + offset));
+                    let _ = bridge.append_non_null_byte_array_result(
+                        get_non_null_byte_array_value(i + offset),
+                    );
                 }
             }
         }
@@ -331,12 +355,15 @@ mod tests {
         bridge
     }
 
-    fn verify_int64_raw_bridge_data(raw_bridge: &Int64Bridge, row_range_set: &RowRangeSet) {
+    fn verify_byte_array_raw_bridge_data(
+        raw_bridge: &ByteArrayBridge,
+        row_range_set: &RowRangeSet,
+    ) {
         let offset = row_range_set.get_offset();
         for row_range in row_range_set.get_row_ranges() {
             for i in row_range.begin..row_range.end {
                 let (validity, value) = raw_bridge
-                    .get_int64_validity_and_value(offset, i, &row_range_set)
+                    .get_byte_array_validity_and_value(offset, i, &row_range_set)
                     .unwrap();
 
                 let index = i + offset;
@@ -345,11 +372,11 @@ mod tests {
                         assert_eq!(validity, false);
                     } else {
                         assert_eq!(validity, true);
-                        assert_eq!(value, index as i64);
+                        assert_eq!(value, index.to_string().into_bytes());
                     }
                 } else {
                     assert_eq!(validity, true);
-                    assert_eq!(value, index as i64);
+                    assert_eq!(value, index.to_string().into_bytes());
                 }
             }
         }
@@ -360,14 +387,14 @@ mod tests {
         let may_has_null = false;
         let capacity = 10;
 
-        let raw_bridge: Int64Bridge = Int64Bridge::new(may_has_null, capacity);
+        let raw_bridge: ByteArrayBridge = ByteArrayBridge::new(may_has_null, capacity);
 
         assert_eq!(raw_bridge.non_null_data.capacity(), 10);
         assert_eq!(raw_bridge.non_null_data.len(), 0);
         assert_eq!(raw_bridge.nullable_data.capacity(), 10);
         assert_eq!(raw_bridge.nullable_data.len(), 0);
         assert_eq!(raw_bridge.may_has_null(), false);
-        assert_eq!(raw_bridge.get_bridge_name(), "Int64 Bridge");
+        assert_eq!(raw_bridge.get_bridge_name(), "Byte Array Bridge");
     }
 
     #[test]
@@ -380,21 +407,22 @@ mod tests {
 
         let row_range_set = create_row_range_set(offset, &bool_vec);
 
-        let raw_bridge = create_int64_bridge(may_has_null, capacity, &row_range_set);
+        let raw_bridge = create_byte_array_bridge(may_has_null, capacity, &row_range_set);
 
         assert_eq!(raw_bridge.get_size(), raw_bridge_size);
 
-        let first_element = raw_bridge.get_int64_validity_and_value(3, 1, &row_range_set);
+        let first_element = raw_bridge.get_byte_array_validity_and_value(3, 1, &row_range_set);
         assert!(first_element.is_ok());
-        assert_eq!(first_element.unwrap(), (true, 4));
+        assert_eq!(first_element.unwrap(), (true, 4.to_string().into_bytes()));
 
-        let first_element = raw_bridge.get_int64_validity_and_value(2, 2, &row_range_set);
+        let first_element = raw_bridge.get_byte_array_validity_and_value(2, 2, &row_range_set);
         assert!(first_element.is_ok());
-        assert_eq!(first_element.unwrap(), (true, 4));
+        assert_eq!(first_element.unwrap(), (true, 4.to_string().into_bytes()));
 
-        verify_int64_raw_bridge_data(&raw_bridge, &row_range_set);
+        verify_byte_array_raw_bridge_data(&raw_bridge, &row_range_set);
 
-        let non_existing_res = raw_bridge.get_int64_validity_and_value(offset, 11, &row_range_set);
+        let non_existing_res =
+            raw_bridge.get_byte_array_validity_and_value(offset, 11, &row_range_set);
         assert!(non_existing_res.is_err());
     }
 
@@ -407,14 +435,14 @@ mod tests {
         let bool_vec = create_random_bool_vec(capacity);
         let row_range_set = create_row_range_set(offset, &bool_vec);
 
-        let values_to_append = create_non_null_int64_data(&row_range_set);
-        let mut raw_bridge = Int64Bridge::new(may_has_null, capacity);
+        let values_to_append = create_non_null_byte_array_data(&row_range_set);
+        let mut raw_bridge = ByteArrayBridge::new(may_has_null, capacity);
 
         assert!(raw_bridge
-            .append_non_null_int64_results(&values_to_append)
+            .append_non_null_byte_array_results(&values_to_append)
             .is_ok());
 
-        verify_int64_raw_bridge_data(&raw_bridge, &row_range_set);
+        verify_byte_array_raw_bridge_data(&raw_bridge, &row_range_set);
     }
 
     #[test]
@@ -426,14 +454,14 @@ mod tests {
         let bool_vec = create_random_bool_vec(capacity);
         let row_range_set = create_row_range_set(offset, &bool_vec);
 
-        let values_to_append = create_nullable_int64_data(&row_range_set);
-        let mut raw_bridge = Int64Bridge::new(may_has_null, capacity);
+        let values_to_append = create_nullable_byte_array_data(&row_range_set);
+        let mut raw_bridge = ByteArrayBridge::new(may_has_null, capacity);
 
         assert!(raw_bridge
-            .append_nullable_int64_results(&values_to_append)
+            .append_nullable_byte_array_results(&values_to_append)
             .is_ok());
 
-        verify_int64_raw_bridge_data(&raw_bridge, &row_range_set);
+        verify_byte_array_raw_bridge_data(&raw_bridge, &row_range_set);
     }
 
     #[test]
@@ -453,7 +481,7 @@ mod tests {
 
         let row_range_set = create_row_range_set(offset, &bool_vec);
 
-        let mut raw_bridge = create_int64_bridge(may_has_null, capacity, &row_range_set);
+        let mut raw_bridge = create_byte_array_bridge(may_has_null, capacity, &row_range_set);
         assert_eq!(raw_bridge.may_has_null(), false);
         assert_eq!(raw_bridge.non_null_data.len(), raw_bridge_size);
         assert_eq!(raw_bridge.nullable_data.len(), 0);
@@ -479,7 +507,7 @@ mod tests {
             .fold(0, |acc, value| if *value { acc + 1 } else { acc });
 
         let row_range_set = create_row_range_set(offset, &bool_vec);
-        let mut raw_bridge = create_int64_bridge(may_has_null, capacity, &row_range_set);
+        let mut raw_bridge = create_byte_array_bridge(may_has_null, capacity, &row_range_set);
         assert_eq!(raw_bridge.may_has_null(), true);
         assert_eq!(raw_bridge.non_null_data.len(), 0);
         assert_eq!(raw_bridge.nullable_data.len(), raw_bridge_size);
@@ -501,13 +529,13 @@ mod tests {
             let self_range = create_row_range_set(offset, &self_bool_vec);
             let other_range = create_row_range_set(offset, &other_bool_vec);
 
-            let mut self_raw_bridge = create_int64_bridge(may_has_null, capacity, &self_range);
-            let mut other_raw_bridge = Int64Bridge::new(may_has_null, capacity);
+            let mut self_raw_bridge = create_byte_array_bridge(may_has_null, capacity, &self_range);
+            let mut other_raw_bridge = ByteArrayBridge::new(may_has_null, capacity);
             assert!(self_raw_bridge
                 .transfer_values(&self_range, &other_range, &mut other_raw_bridge)
                 .is_ok());
 
-            verify_int64_raw_bridge_data(&other_raw_bridge, &other_range);
+            verify_byte_array_raw_bridge_data(&other_raw_bridge, &other_range);
         }
     }
 
@@ -525,13 +553,13 @@ mod tests {
             let self_range = create_row_range_set(offset, &self_bool_vec);
             let other_range = create_row_range_set(offset, &other_bool_vec);
 
-            let mut self_raw_bridge = create_int64_bridge(may_has_null, capacity, &self_range);
-            let mut other_raw_bridge = Int64Bridge::new(may_has_null, capacity);
+            let mut self_raw_bridge = create_byte_array_bridge(may_has_null, capacity, &self_range);
+            let mut other_raw_bridge = ByteArrayBridge::new(may_has_null, capacity);
             assert!(self_raw_bridge
                 .transfer_values(&self_range, &other_range, &mut other_raw_bridge)
                 .is_ok());
 
-            verify_int64_raw_bridge_data(&other_raw_bridge, &other_range);
+            verify_byte_array_raw_bridge_data(&other_raw_bridge, &other_range);
         }
     }
 
@@ -544,8 +572,8 @@ mod tests {
         let bool_vec = Vec::from([false, true, false, false, true, true, false, true, true]);
         let row_range_set = create_row_range_set(offset, &bool_vec);
 
-        let mut raw_bridge = create_int64_bridge(may_has_null, capacity, &row_range_set);
+        let mut raw_bridge = create_byte_array_bridge(may_has_null, capacity, &row_range_set);
 
-        assert!(raw_bridge.to_int64_arrow_array().is_ok());
+        assert!(raw_bridge.to_byte_array_arrow_array().is_ok());
     }
 }
