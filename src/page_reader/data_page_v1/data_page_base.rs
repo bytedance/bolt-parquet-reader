@@ -17,10 +17,12 @@ use std::intrinsics::unlikely;
 
 use crate::bridge::result_bridge::ResultBridge;
 use crate::page_reader::data_page_v1::boolean_data_page_v1::BooleanDataPageReaderV1;
+use crate::page_reader::data_page_v1::plain_data_page_byte_array_v1::PlainDataPageReaderByteArrayV1;
 use crate::page_reader::data_page_v1::plain_data_page_float32_v1::PlainDataPageReaderFloat32V1;
 use crate::page_reader::data_page_v1::plain_data_page_float64_v1::PlainDataPageReaderFloat64V1;
 use crate::page_reader::data_page_v1::plain_data_page_int32_v1::PlainDataPageReaderInt32V1;
 use crate::page_reader::data_page_v1::plain_data_page_int64_v1::PlainDataPageReaderInt64V1;
+use crate::page_reader::data_page_v1::rle_bp_data_page_byte_array_v1::RleBpDataPageReaderByteArrayV1;
 use crate::page_reader::data_page_v1::rle_bp_data_page_float32_v1::RleBpDataPageReaderFloat32V1;
 use crate::page_reader::data_page_v1::rle_bp_data_page_float64_v1::RleBpDataPageReaderFloat64V1;
 use crate::page_reader::data_page_v1::rle_bp_data_page_int32_v1::RleBpDataPageReaderInt32V1;
@@ -38,6 +40,8 @@ pub enum DataPageEnum<'a> {
     RleBpDataPageReaderInt64V1(RleBpDataPageReaderInt64V1<'a>),
     RleBpDataPageReaderFloat32V1(RleBpDataPageReaderFloat32V1<'a>),
     RleBpDataPageReaderFloat64V1(RleBpDataPageReaderFloat64V1<'a>),
+    PlainDataPageReaderByteArrayV1(PlainDataPageReaderByteArrayV1<'a>),
+    RleBpDataPageReaderByteArrayV1(RleBpDataPageReaderByteArrayV1<'a>),
 }
 
 pub trait DataPage {
@@ -96,6 +100,12 @@ impl<'a> DataPage for DataPageEnum<'a> {
             DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => {
                 page_reader.data_page_has_null()
             }
+            DataPageEnum::PlainDataPageReaderByteArrayV1(page_reader) => {
+                page_reader.data_page_has_null()
+            }
+            DataPageEnum::RleBpDataPageReaderByteArrayV1(page_reader) => {
+                page_reader.data_page_has_null()
+            }
         }
     }
 
@@ -126,6 +136,12 @@ impl<'a> DataPage for DataPageEnum<'a> {
                 page_reader.get_data_page_num_values()
             }
             DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => {
+                page_reader.get_data_page_num_values()
+            }
+            DataPageEnum::PlainDataPageReaderByteArrayV1(page_reader) => {
+                page_reader.get_data_page_num_values()
+            }
+            DataPageEnum::RleBpDataPageReaderByteArrayV1(page_reader) => {
                 page_reader.get_data_page_num_values()
             }
         }
@@ -160,6 +176,12 @@ impl<'a> DataPage for DataPageEnum<'a> {
             DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => {
                 page_reader.get_data_page_offset()
             }
+            DataPageEnum::PlainDataPageReaderByteArrayV1(page_reader) => {
+                page_reader.get_data_page_offset()
+            }
+            DataPageEnum::RleBpDataPageReaderByteArrayV1(page_reader) => {
+                page_reader.get_data_page_offset()
+            }
         }
     }
 
@@ -192,6 +214,12 @@ impl<'a> DataPage for DataPageEnum<'a> {
             DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => {
                 page_reader.get_data_page_type_size()
             }
+            DataPageEnum::PlainDataPageReaderByteArrayV1(page_reader) => {
+                page_reader.get_data_page_type_size()
+            }
+            DataPageEnum::RleBpDataPageReaderByteArrayV1(page_reader) => {
+                page_reader.get_data_page_type_size()
+            }
         }
     }
 
@@ -206,6 +234,12 @@ impl<'a> DataPage for DataPageEnum<'a> {
             DataPageEnum::RleBpDataPageReaderInt64V1(page_reader) => page_reader.is_zero_copied(),
             DataPageEnum::RleBpDataPageReaderFloat32V1(page_reader) => page_reader.is_zero_copied(),
             DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => page_reader.is_zero_copied(),
+            DataPageEnum::PlainDataPageReaderByteArrayV1(page_reader) => {
+                page_reader.is_zero_copied()
+            }
+            DataPageEnum::RleBpDataPageReaderByteArrayV1(page_reader) => {
+                page_reader.is_zero_copied()
+            }
         }
     }
 
@@ -244,6 +278,12 @@ impl<'a> DataPage for DataPageEnum<'a> {
             DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => {
                 page_reader.read(to_read, offset, result_row_range_set, result_bridge)
             }
+            DataPageEnum::PlainDataPageReaderByteArrayV1(page_reader) => {
+                page_reader.read(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::RleBpDataPageReaderByteArrayV1(page_reader) => {
+                page_reader.read(to_read, offset, result_row_range_set, result_bridge)
+            }
         }
     }
 
@@ -280,6 +320,12 @@ impl<'a> DataPage for DataPageEnum<'a> {
                 page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
             }
             DataPageEnum::RleBpDataPageReaderFloat64V1(page_reader) => {
+                page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::PlainDataPageReaderByteArrayV1(page_reader) => {
+                page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
+            }
+            DataPageEnum::RleBpDataPageReaderByteArrayV1(page_reader) => {
                 page_reader.read_with_filter(to_read, offset, result_row_range_set, result_bridge)
             }
         }

@@ -262,6 +262,83 @@ pub mod test_utils {
         }
     }
 
+    pub fn verify_plain_byte_array_non_null_result(
+        result_row_range_set: &RowRangeSet,
+        raw_bridge: &dyn ResultBridge,
+    ) {
+        let offset = result_row_range_set.get_offset();
+        for row_range in result_row_range_set.get_row_ranges() {
+            for i in row_range.begin..row_range.end {
+                let (validity, value) = raw_bridge
+                    .get_byte_array_validity_and_value(offset, i, &result_row_range_set)
+                    .unwrap();
+
+                assert_eq!(validity, true);
+                assert_eq!(i.to_string().into_bytes(), value);
+            }
+        }
+    }
+
+    pub fn verify_plain_byte_array_nullable_result(
+        result_row_range_set: &RowRangeSet,
+        raw_bridge: &dyn ResultBridge,
+    ) {
+        let offset = result_row_range_set.get_offset();
+        for row_range in result_row_range_set.get_row_ranges() {
+            for i in row_range.begin..row_range.end {
+                let (validity, value) = raw_bridge
+                    .get_byte_array_validity_and_value(offset, i, &result_row_range_set)
+                    .unwrap();
+
+                if i % 5 == 0 || i % 17 == 0 {
+                    assert_eq!(validity, false);
+                } else {
+                    assert_eq!(validity, true);
+                    assert_eq!(i.to_string().into_bytes(), value);
+                }
+            }
+        }
+    }
+
+    pub fn verify_rle_bp_byte_array_non_null_result(
+        result_row_range_set: &RowRangeSet,
+        raw_bridge: &dyn ResultBridge,
+    ) {
+        let offset = result_row_range_set.get_offset();
+        for row_range in result_row_range_set.get_row_ranges() {
+            for i in row_range.begin..row_range.end {
+                assert_eq!(
+                    raw_bridge
+                        .get_byte_array_validity_and_value(offset, i, &result_row_range_set)
+                        .unwrap(),
+                    (true, (i % 1000).to_string().into_bytes())
+                );
+            }
+        }
+    }
+
+    pub fn verify_rle_bp_byte_array_nullable_result(
+        result_row_range_set: &RowRangeSet,
+        raw_bridge: &dyn ResultBridge,
+    ) {
+        let offset = result_row_range_set.get_offset();
+        for row_range in result_row_range_set.get_row_ranges() {
+            for i in row_range.begin..row_range.end {
+                let (validity, value) = raw_bridge
+                    .get_byte_array_validity_and_value(offset, i, &result_row_range_set)
+                    .unwrap();
+                if i % 5 == 0 || i % 17 == 0 {
+                    assert_eq!(validity, false);
+                } else {
+                    assert_eq!(
+                        (validity, value),
+                        (true, (i % 1000).to_string().into_bytes())
+                    );
+                }
+            }
+        }
+    }
+
     pub fn verify_rle_bp_float32_non_null_result(
         result_row_range_set: &RowRangeSet,
         raw_bridge: &dyn ResultBridge,

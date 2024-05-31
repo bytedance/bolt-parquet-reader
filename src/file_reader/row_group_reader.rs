@@ -19,6 +19,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::bridge::boolean_bridge::BooleanBridge;
+use crate::bridge::byte_array_bridge::ByteArrayBridge;
 use crate::bridge::float32_bridge::Float32Bridge;
 use crate::bridge::float64_bridge::Float64Bridge;
 use crate::bridge::int32_bridge::Int32Bridge;
@@ -174,6 +175,10 @@ impl<'a> RowGroupReader<'a> {
                 to_read_size,
             ))),
 
+            PhysicalDataType::ByteArray => Ok(ResultBridgeEnum::ByteArrayBridge(
+                ByteArrayBridge::new(false, to_read_size),
+            )),
+
             PhysicalDataType::None => Err(BoltReaderError::RowGroupReaderError(String::from(
                 "Unable to load the physical type",
             ))),
@@ -301,10 +306,12 @@ mod tests {
     use crate::utils::shared_memory_buffer::SharedMemoryBuffer;
     use crate::utils::test_utils::test_utils::{
         verify_boolean_non_null_result, verify_boolean_nullable_result,
+        verify_plain_byte_array_non_null_result, verify_plain_byte_array_nullable_result,
         verify_plain_float32_non_null_result, verify_plain_float32_nullable_result,
         verify_plain_float64_non_null_result, verify_plain_float64_nullable_result,
         verify_plain_int32_non_null_result, verify_plain_int32_nullable_result,
         verify_plain_int64_non_null_result, verify_plain_int64_nullable_result,
+        verify_rle_bp_byte_array_non_null_result, verify_rle_bp_byte_array_nullable_result,
         verify_rle_bp_float32_non_null_result, verify_rle_bp_float32_nullable_result,
         verify_rle_bp_float64_non_null_result, verify_rle_bp_float64_nullable_result,
         verify_rle_bp_int32_non_null_result, verify_rle_bp_int32_nullable_result,
@@ -318,6 +325,7 @@ mod tests {
     const INT64_COLUMN: &str = "bigint";
     const FLOAT32_COLUMN: &str = "float";
     const FLOAT64_COLUMN: &str = "double";
+    const STRING_COLUMN: &str = "string";
 
     fn load_parquet_footer(file: &String) -> FileMetaData {
         let metadata_loader =
@@ -390,6 +398,11 @@ mod tests {
                     result.get(column).unwrap(),
                     *filter,
                 );
+            } else if *column == String::from(STRING_COLUMN) {
+                verify_plain_byte_array_non_null_result(
+                    result_row_set.as_ref(),
+                    result.get(column).unwrap(),
+                );
             }
         }
     }
@@ -429,6 +442,11 @@ mod tests {
                     result_row_set.as_ref(),
                     result.get(column).unwrap(),
                     *filter,
+                );
+            } else if *column == String::from(STRING_COLUMN) {
+                verify_plain_byte_array_nullable_result(
+                    result_row_set.as_ref(),
+                    result.get(column).unwrap(),
                 );
             }
         }
@@ -470,6 +488,11 @@ mod tests {
                     result.get(column).unwrap(),
                     *filter,
                 );
+            } else if *column == String::from(STRING_COLUMN) {
+                verify_rle_bp_byte_array_non_null_result(
+                    result_row_set.as_ref(),
+                    result.get(column).unwrap(),
+                );
             }
         }
     }
@@ -510,6 +533,11 @@ mod tests {
                     result.get(column).unwrap(),
                     *filter,
                 );
+            } else if *column == String::from(STRING_COLUMN) {
+                verify_rle_bp_byte_array_nullable_result(
+                    result_row_set.as_ref(),
+                    result.get(column).unwrap(),
+                );
             }
         }
     }
@@ -529,6 +557,7 @@ mod tests {
         columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
         columns_to_read.insert(String::from(INT64_COLUMN), None);
         columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+        columns_to_read.insert(String::from(STRING_COLUMN), None);
 
         let res = load_row_group_reader(&path, &columns_to_read);
         assert!(res.is_ok());
@@ -549,6 +578,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -582,6 +612,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -617,6 +648,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -652,6 +684,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -688,6 +721,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -724,6 +758,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -762,6 +797,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -800,6 +836,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -839,6 +876,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -878,6 +916,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -919,6 +958,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), Some(&double_filter));
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -960,6 +1000,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), Some(&double_filter));
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -993,6 +1034,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1026,6 +1068,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1061,6 +1104,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1096,6 +1140,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1132,6 +1177,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1168,6 +1214,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1206,6 +1253,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1244,6 +1292,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1283,6 +1332,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1322,6 +1372,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1363,6 +1414,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), Some(&double_filter));
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1404,6 +1456,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), Some(&double_filter));
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1437,6 +1490,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1470,6 +1524,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1505,6 +1560,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1540,6 +1596,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1576,6 +1633,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1612,6 +1670,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1650,6 +1709,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1688,6 +1748,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1727,6 +1788,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1766,6 +1828,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1807,6 +1870,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), Some(&double_filter));
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1848,6 +1912,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), Some(&double_filter));
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1881,6 +1946,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1914,6 +1980,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1949,6 +2016,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -1984,6 +2052,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -2020,6 +2089,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -2056,6 +2126,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -2094,6 +2165,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -2132,6 +2204,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), None);
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -2171,6 +2244,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -2210,6 +2284,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -2251,6 +2326,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), Some(&double_filter));
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
@@ -2292,6 +2368,7 @@ mod tests {
             columns_to_read.insert(String::from(FLOAT32_COLUMN), Some(&float_filter));
             columns_to_read.insert(String::from(INT64_COLUMN), Some(&bigint_filter));
             columns_to_read.insert(String::from(FLOAT64_COLUMN), Some(&double_filter));
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
 
             let res = load_row_group_reader(&path, &columns_to_read);
             assert!(res.is_ok());
