@@ -100,9 +100,16 @@ pub fn create_column_schema_node(
                 // 2. MapElement
                 // 3. Struct
                 None => match cur_schema.repetition_type {
-                    None => Err(BoltReaderError::MetadataError(String::from(
-                        "Schema Repetition Type cannot be empty for nested types",
-                    ))),
+                    None => ColumnSchema::new(
+                        false,
+                        cur_schema.name.clone(),
+                        SchemaNodeType::Struct,
+                        None,
+                        column_idx,
+                        max_def,
+                        max_rep,
+                    ),
+
                     Some(repetition_type) => {
                         if repetition_type == FieldRepetitionType::REPEATED {
                             match cur_schema.num_children {

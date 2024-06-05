@@ -74,9 +74,24 @@ impl<'a> LocalFileReader<'a> {
 
         let buffer_begin = match self.footer.row_groups[self.row_group_index].file_offset {
             None => {
-                return Err(BoltReaderError::FileReaderError(String::from(
-                    "Unable to find the offset of the row group",
-                )));
+                let first_column_metadata = self.footer.row_groups[self.row_group_index].columns[0]
+                    .meta_data
+                    .as_ref();
+                match first_column_metadata {
+                    None => {
+                        return Err(BoltReaderError::FileReaderError(String::from(
+                            "Unable to find the offset of the row group",
+                        )));
+                    }
+                    Some(first_column_metadata) => {
+                        let dictionary_page_offset =
+                            first_column_metadata.dictionary_page_offset.as_ref();
+                        match dictionary_page_offset {
+                            None => first_column_metadata.data_page_offset,
+                            Some(dictionary_page_offset) => *dictionary_page_offset,
+                        }
+                    }
+                }
             }
             Some(buffer_begin) => buffer_begin,
         };
