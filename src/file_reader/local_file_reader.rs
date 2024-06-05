@@ -97,11 +97,14 @@ impl<'a> LocalFileReader<'a> {
         };
 
         let total_columns = self.footer.row_groups[self.row_group_index].columns.len();
-        let buffer_end = buffer_begin
-            + self.footer.row_groups[self.row_group_index].columns[total_columns - 1].file_offset;
+        let buffer_end =
+            self.footer.row_groups[self.row_group_index].columns[total_columns - 1].file_offset;
 
-        let buffer =
-            SharedMemoryBuffer::from_file(&file, buffer_begin as usize, buffer_end as usize)?;
+        let buffer = SharedMemoryBuffer::from_file(
+            &file,
+            buffer_begin as usize,
+            (buffer_end - buffer_begin) as usize,
+        )?;
 
         self.row_group_reader = Some(RowGroupReader::from_buffer(
             buffer,
@@ -115,6 +118,7 @@ impl<'a> LocalFileReader<'a> {
 
     pub fn advance_to_next_row_group(&mut self) -> bool {
         self.row_group_index += 1;
+        self.row_group_reader = None;
 
         self.row_group_index >= self.num_row_groups
     }
