@@ -67,16 +67,14 @@ fn main() {
     let total_time = Instant::now();
 
     for file in &files {
-        let res = LocalFileReader::from_local_file(&file.to_string(), columns_to_read.clone());
-        assert!(res.is_ok());
-        let mut file_reader = res.unwrap();
+        let mut file_reader =
+            LocalFileReader::from_local_file(&file.to_string(), columns_to_read.clone())
+                .expect("unable to read file");
 
         let start = Instant::now();
         let mut finished = false;
         while !finished {
-            let res = file_reader.read(batch_size);
-            assert!(res.is_ok());
-            let res = res.unwrap();
+            let res = file_reader.read(batch_size).expect("Reading error");
             finished = res.1;
         }
         println!(
