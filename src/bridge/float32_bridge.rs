@@ -84,7 +84,7 @@ impl Float32Bridge {
 
 impl ResultBridge for Float32Bridge {
     fn get_bridge_name(&self) -> String {
-        String::from("Int32 Bridge")
+        String::from("Float32 Bridge")
     }
 
     fn is_empty(&self) -> bool {
@@ -369,7 +369,7 @@ mod tests {
         assert_eq!(raw_bridge.nullable_data.capacity(), 10);
         assert_eq!(raw_bridge.nullable_data.len(), 0);
         assert_eq!(raw_bridge.may_has_null(), false);
-        assert_eq!(raw_bridge.get_bridge_name(), "Int32 Bridge");
+        assert_eq!(raw_bridge.get_bridge_name(), "Float32 Bridge");
     }
 
     #[test]

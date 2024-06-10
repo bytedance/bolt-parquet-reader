@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use arrow::array::{BooleanArray, Float32Array, Float64Array, Int32Array, Int64Array};
+use arrow::array::{BinaryArray, BooleanArray, Float32Array, Float64Array, Int32Array, Int64Array};
 
 use crate::bridge::boolean_bridge::BooleanBridge;
+use crate::bridge::byte_array_bridge::{ByteArray, ByteArrayBridge};
 use crate::bridge::float32_bridge::Float32Bridge;
 use crate::bridge::float64_bridge::Float64Bridge;
 use crate::bridge::int32_bridge::Int32Bridge;
@@ -33,6 +34,7 @@ pub enum BridgeDataType {
     Int64,
     Float32,
     Float64,
+    ByteArray,
 }
 
 pub enum ResultBridgeEnum {
@@ -41,6 +43,7 @@ pub enum ResultBridgeEnum {
     Int64Bridge(Int64Bridge),
     Float32Bridge(Float32Bridge),
     Float64Bridge(Float64Bridge),
+    ByteArrayBridge(ByteArrayBridge),
 }
 
 pub trait ResultBridge {
@@ -295,6 +298,62 @@ pub trait ResultBridge {
         )))
     }
 
+    fn append_nullable_byte_array_result(
+        &mut self,
+        _: Option<ByteArray>,
+    ) -> Result<(), BoltReaderError> {
+        Err(BoltReaderError::BridgeError(format!(
+            "Cannot append byte array value to {}",
+            self.get_bridge_name()
+        )))
+    }
+
+    fn append_nullable_byte_array_results(
+        &mut self,
+        _: &[Option<ByteArray>],
+    ) -> Result<(), BoltReaderError> {
+        Err(BoltReaderError::BridgeError(format!(
+            "Cannot append byte array values to {}",
+            self.get_bridge_name()
+        )))
+    }
+
+    fn append_non_null_byte_array_result(&mut self, _: ByteArray) -> Result<(), BoltReaderError> {
+        Err(BoltReaderError::BridgeError(format!(
+            "Cannot append byte array value to {}",
+            self.get_bridge_name()
+        )))
+    }
+
+    fn append_non_null_byte_array_results(
+        &mut self,
+        _: &[ByteArray],
+    ) -> Result<(), BoltReaderError> {
+        Err(BoltReaderError::BridgeError(format!(
+            "Cannot append byte array values to {}",
+            self.get_bridge_name()
+        )))
+    }
+
+    fn get_byte_array_validity_and_value(
+        &self,
+        _offset: usize,
+        _index: usize,
+        _ranges: &RowRangeSet,
+    ) -> Result<(bool, ByteArray), BoltReaderError> {
+        Err(BoltReaderError::BridgeError(format!(
+            "get_byte_array_validity_and_value() is not supported on {}",
+            self.get_bridge_name()
+        )))
+    }
+
+    fn to_byte_array_arrow_array(&mut self) -> Result<BinaryArray, BoltReaderError> {
+        Err(BoltReaderError::BridgeError(format!(
+            "Cannot construct byte array arrow array from {}",
+            self.get_bridge_name()
+        )))
+    }
+
     /// Transfer the current self RawBridge values and Validity to another Bridge.
     ///
     /// # Arguments
@@ -331,18 +390,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.get_bridge_name(),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.get_bridge_name(),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.get_bridge_name(),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.get_bridge_name(),
         }
     }
-
-    // fn is_empty(&self) -> bool {
-    //     match self {
-    //         ResultBridgeEnum::BooleanBridge(bridge) => {}
-    //         ResultBridgeEnum::Int32Bridge(bridge) => {}
-    //         ResultBridgeEnum::Int64Bridge(bridge) => {}
-    //         ResultBridgeEnum::Float32Bridge(bridge) => {}
-    //         ResultBridgeEnum::Float64Bridge(bridge) => {}
-    //     }
-    // }
 
     fn is_empty(&self) -> bool {
         match self {
@@ -351,6 +401,7 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.is_empty(),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.is_empty(),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.is_empty(),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.is_empty(),
         }
     }
 
@@ -361,6 +412,7 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.get_size(),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.get_size(),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.get_size(),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.get_size(),
         }
     }
 
@@ -371,6 +423,7 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.may_has_null(),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.may_has_null(),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.may_has_null(),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.may_has_null(),
         }
     }
 
@@ -381,6 +434,7 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.set_may_has_null(may_has_null),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.set_may_has_null(may_has_null),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.set_may_has_null(may_has_null),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.set_may_has_null(may_has_null),
         }
     }
 
@@ -391,6 +445,7 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.append_nullable_bool_result(result),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.append_nullable_bool_result(result),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.append_nullable_bool_result(result),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.append_nullable_bool_result(result),
         }
     }
 
@@ -404,6 +459,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.append_nullable_bool_results(result),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.append_nullable_bool_results(result),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.append_nullable_bool_results(result),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_nullable_bool_results(result)
+            }
         }
     }
 
@@ -414,6 +472,7 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.append_non_null_bool_result(result),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.append_non_null_bool_result(result),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.append_non_null_bool_result(result),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.append_non_null_bool_result(result),
         }
     }
 
@@ -424,6 +483,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.append_non_null_bool_results(result),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.append_non_null_bool_results(result),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.append_non_null_bool_results(result),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_non_null_bool_results(result)
+            }
         }
     }
 
@@ -449,6 +511,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Float64Bridge(bridge) => {
                 bridge.get_bool_validity_and_value(offset, index, ranges)
             }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.get_bool_validity_and_value(offset, index, ranges)
+            }
         }
     }
 
@@ -459,6 +524,7 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.to_bool_arrow_array(),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.to_bool_arrow_array(),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.to_bool_arrow_array(),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.to_bool_arrow_array(),
         }
     }
 
@@ -469,6 +535,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.append_nullable_int32_result(result),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.append_nullable_int32_result(result),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.append_nullable_int32_result(result),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_nullable_int32_result(result)
+            }
         }
     }
 
@@ -482,6 +551,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.append_nullable_int32_results(result),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.append_nullable_int32_results(result),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.append_nullable_int32_results(result),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_nullable_int32_results(result)
+            }
         }
     }
 
@@ -492,6 +564,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.append_non_null_int32_result(result),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.append_non_null_int32_result(result),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.append_non_null_int32_result(result),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_non_null_int32_result(result)
+            }
         }
     }
 
@@ -502,6 +577,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.append_non_null_int32_results(result),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.append_non_null_int32_results(result),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.append_non_null_int32_results(result),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_non_null_int32_results(result)
+            }
         }
     }
 
@@ -527,6 +605,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Float64Bridge(bridge) => {
                 bridge.get_int32_validity_and_value(offset, index, ranges)
             }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.get_int32_validity_and_value(offset, index, ranges)
+            }
         }
     }
 
@@ -537,6 +618,7 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.to_int32_arrow_array(),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.to_int32_arrow_array(),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.to_int32_arrow_array(),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.to_int32_arrow_array(),
         }
     }
 
@@ -547,6 +629,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.append_nullable_int64_result(result),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.append_nullable_int64_result(result),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.append_nullable_int64_result(result),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_nullable_int64_result(result)
+            }
         }
     }
 
@@ -560,6 +645,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.append_nullable_int64_results(result),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.append_nullable_int64_results(result),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.append_nullable_int64_results(result),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_nullable_int64_results(result)
+            }
         }
     }
 
@@ -570,6 +658,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.append_non_null_int64_result(result),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.append_non_null_int64_result(result),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.append_non_null_int64_result(result),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_non_null_int64_result(result)
+            }
         }
     }
 
@@ -580,6 +671,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.append_non_null_int64_results(result),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.append_non_null_int64_results(result),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.append_non_null_int64_results(result),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_non_null_int64_results(result)
+            }
         }
     }
 
@@ -605,6 +699,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Float64Bridge(bridge) => {
                 bridge.get_int64_validity_and_value(offset, index, ranges)
             }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.get_int64_validity_and_value(offset, index, ranges)
+            }
         }
     }
 
@@ -615,6 +712,7 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.to_int64_arrow_array(),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.to_int64_arrow_array(),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.to_int64_arrow_array(),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.to_int64_arrow_array(),
         }
     }
 
@@ -632,6 +730,9 @@ impl ResultBridge for ResultBridgeEnum {
                 bridge.append_nullable_float32_result(result)
             }
             ResultBridgeEnum::Float64Bridge(bridge) => {
+                bridge.append_nullable_float32_result(result)
+            }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
                 bridge.append_nullable_float32_result(result)
             }
         }
@@ -653,6 +754,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Float64Bridge(bridge) => {
                 bridge.append_nullable_float32_results(result)
             }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_nullable_float32_results(result)
+            }
         }
     }
 
@@ -669,6 +773,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Float64Bridge(bridge) => {
                 bridge.append_non_null_float32_result(result)
             }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_non_null_float32_result(result)
+            }
         }
     }
 
@@ -683,6 +790,9 @@ impl ResultBridge for ResultBridgeEnum {
                 bridge.append_non_null_float32_results(result)
             }
             ResultBridgeEnum::Float64Bridge(bridge) => {
+                bridge.append_non_null_float32_results(result)
+            }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
                 bridge.append_non_null_float32_results(result)
             }
         }
@@ -710,6 +820,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Float64Bridge(bridge) => {
                 bridge.get_float32_validity_and_value(offset, index, ranges)
             }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.get_float32_validity_and_value(offset, index, ranges)
+            }
         }
     }
 
@@ -720,6 +833,7 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.to_float32_arrow_array(),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.to_float32_arrow_array(),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.to_float32_arrow_array(),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.to_float32_arrow_array(),
         }
     }
 
@@ -737,6 +851,9 @@ impl ResultBridge for ResultBridgeEnum {
                 bridge.append_nullable_float64_result(result)
             }
             ResultBridgeEnum::Float64Bridge(bridge) => {
+                bridge.append_nullable_float64_result(result)
+            }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
                 bridge.append_nullable_float64_result(result)
             }
         }
@@ -758,6 +875,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Float64Bridge(bridge) => {
                 bridge.append_nullable_float64_results(result)
             }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_nullable_float64_results(result)
+            }
         }
     }
 
@@ -774,6 +894,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Float64Bridge(bridge) => {
                 bridge.append_non_null_float64_result(result)
             }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_non_null_float64_result(result)
+            }
         }
     }
 
@@ -788,6 +911,9 @@ impl ResultBridge for ResultBridgeEnum {
                 bridge.append_non_null_float64_results(result)
             }
             ResultBridgeEnum::Float64Bridge(bridge) => {
+                bridge.append_non_null_float64_results(result)
+            }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
                 bridge.append_non_null_float64_results(result)
             }
         }
@@ -815,6 +941,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Float64Bridge(bridge) => {
                 bridge.get_float64_validity_and_value(offset, index, ranges)
             }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.get_float64_validity_and_value(offset, index, ranges)
+            }
         }
     }
 
@@ -825,6 +954,150 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.to_float64_arrow_array(),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.to_float64_arrow_array(),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.to_float64_arrow_array(),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.to_float64_arrow_array(),
+        }
+    }
+
+    fn append_nullable_byte_array_result(
+        &mut self,
+        result: Option<ByteArray>,
+    ) -> Result<(), BoltReaderError> {
+        match self {
+            ResultBridgeEnum::BooleanBridge(bridge) => {
+                bridge.append_nullable_byte_array_result(result)
+            }
+            ResultBridgeEnum::Int32Bridge(bridge) => {
+                bridge.append_nullable_byte_array_result(result)
+            }
+            ResultBridgeEnum::Int64Bridge(bridge) => {
+                bridge.append_nullable_byte_array_result(result)
+            }
+            ResultBridgeEnum::Float32Bridge(bridge) => {
+                bridge.append_nullable_byte_array_result(result)
+            }
+            ResultBridgeEnum::Float64Bridge(bridge) => {
+                bridge.append_nullable_byte_array_result(result)
+            }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_nullable_byte_array_result(result)
+            }
+        }
+    }
+
+    fn append_nullable_byte_array_results(
+        &mut self,
+        result: &[Option<ByteArray>],
+    ) -> Result<(), BoltReaderError> {
+        match self {
+            ResultBridgeEnum::BooleanBridge(bridge) => {
+                bridge.append_nullable_byte_array_results(result)
+            }
+            ResultBridgeEnum::Int32Bridge(bridge) => {
+                bridge.append_nullable_byte_array_results(result)
+            }
+            ResultBridgeEnum::Int64Bridge(bridge) => {
+                bridge.append_nullable_byte_array_results(result)
+            }
+            ResultBridgeEnum::Float32Bridge(bridge) => {
+                bridge.append_nullable_byte_array_results(result)
+            }
+            ResultBridgeEnum::Float64Bridge(bridge) => {
+                bridge.append_nullable_byte_array_results(result)
+            }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_nullable_byte_array_results(result)
+            }
+        }
+    }
+
+    fn append_non_null_byte_array_result(
+        &mut self,
+        result: ByteArray,
+    ) -> Result<(), BoltReaderError> {
+        match self {
+            ResultBridgeEnum::BooleanBridge(bridge) => {
+                bridge.append_non_null_byte_array_result(result)
+            }
+            ResultBridgeEnum::Int32Bridge(bridge) => {
+                bridge.append_non_null_byte_array_result(result)
+            }
+            ResultBridgeEnum::Int64Bridge(bridge) => {
+                bridge.append_non_null_byte_array_result(result)
+            }
+            ResultBridgeEnum::Float32Bridge(bridge) => {
+                bridge.append_non_null_byte_array_result(result)
+            }
+            ResultBridgeEnum::Float64Bridge(bridge) => {
+                bridge.append_non_null_byte_array_result(result)
+            }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_non_null_byte_array_result(result)
+            }
+        }
+    }
+
+    fn append_non_null_byte_array_results(
+        &mut self,
+        result: &[ByteArray],
+    ) -> Result<(), BoltReaderError> {
+        match self {
+            ResultBridgeEnum::BooleanBridge(bridge) => {
+                bridge.append_non_null_byte_array_results(result)
+            }
+            ResultBridgeEnum::Int32Bridge(bridge) => {
+                bridge.append_non_null_byte_array_results(result)
+            }
+            ResultBridgeEnum::Int64Bridge(bridge) => {
+                bridge.append_non_null_byte_array_results(result)
+            }
+            ResultBridgeEnum::Float32Bridge(bridge) => {
+                bridge.append_non_null_byte_array_results(result)
+            }
+            ResultBridgeEnum::Float64Bridge(bridge) => {
+                bridge.append_non_null_byte_array_results(result)
+            }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.append_non_null_byte_array_results(result)
+            }
+        }
+    }
+
+    fn get_byte_array_validity_and_value(
+        &self,
+        offset: usize,
+        index: usize,
+        ranges: &RowRangeSet,
+    ) -> Result<(bool, ByteArray), BoltReaderError> {
+        match self {
+            ResultBridgeEnum::BooleanBridge(bridge) => {
+                bridge.get_byte_array_validity_and_value(offset, index, ranges)
+            }
+            ResultBridgeEnum::Int32Bridge(bridge) => {
+                bridge.get_byte_array_validity_and_value(offset, index, ranges)
+            }
+            ResultBridgeEnum::Int64Bridge(bridge) => {
+                bridge.get_byte_array_validity_and_value(offset, index, ranges)
+            }
+            ResultBridgeEnum::Float32Bridge(bridge) => {
+                bridge.get_byte_array_validity_and_value(offset, index, ranges)
+            }
+            ResultBridgeEnum::Float64Bridge(bridge) => {
+                bridge.get_byte_array_validity_and_value(offset, index, ranges)
+            }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.get_byte_array_validity_and_value(offset, index, ranges)
+            }
+        }
+    }
+
+    fn to_byte_array_arrow_array(&mut self) -> Result<BinaryArray, BoltReaderError> {
+        match self {
+            ResultBridgeEnum::BooleanBridge(bridge) => bridge.to_byte_array_arrow_array(),
+            ResultBridgeEnum::Int32Bridge(bridge) => bridge.to_byte_array_arrow_array(),
+            ResultBridgeEnum::Int64Bridge(bridge) => bridge.to_byte_array_arrow_array(),
+            ResultBridgeEnum::Float32Bridge(bridge) => bridge.to_byte_array_arrow_array(),
+            ResultBridgeEnum::Float64Bridge(bridge) => bridge.to_byte_array_arrow_array(),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.to_byte_array_arrow_array(),
         }
     }
 
@@ -850,6 +1123,9 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Float64Bridge(bridge) => {
                 bridge.transfer_values(self_ranges, other_ranges, result_bridge)
             }
+            ResultBridgeEnum::ByteArrayBridge(bridge) => {
+                bridge.transfer_values(self_ranges, other_ranges, result_bridge)
+            }
         }
     }
 
@@ -860,6 +1136,7 @@ impl ResultBridge for ResultBridgeEnum {
             ResultBridgeEnum::Int64Bridge(bridge) => bridge.as_nullable(),
             ResultBridgeEnum::Float32Bridge(bridge) => bridge.as_nullable(),
             ResultBridgeEnum::Float64Bridge(bridge) => bridge.as_nullable(),
+            ResultBridgeEnum::ByteArrayBridge(bridge) => bridge.as_nullable(),
         }
     }
 }
