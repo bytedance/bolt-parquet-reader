@@ -69,13 +69,16 @@ impl<'a> RowGroupReader<'a> {
                         )));
                     }
 
+                    let row_group_file_offset =
+                        Self::get_row_group_file_offset(row_group_meta_data)?;
+
                     let column_offset = if let Some(dictionary_page_offset) =
                         column_metadata.dictionary_page_offset
                     {
                         dictionary_page_offset as usize
                     } else {
                         column_metadata.data_page_offset as usize
-                    } - row_group_meta_data.file_offset.unwrap() as usize;
+                    } - row_group_file_offset as usize;
 
                     let column_buffer = SharedMemoryBuffer::from_shared_memory_buffer(
                         &buffer,
@@ -115,6 +118,31 @@ impl<'a> RowGroupReader<'a> {
             columns_with_filters,
             columns_without_filters,
         })
+    }
+
+    pub fn get_row_group_file_offset(
+        row_group_meta_data: &RowGroup,
+    ) -> Result<i64, BoltReaderError> {
+        match row_group_meta_data.file_offset {
+            None => {
+                let first_column_metadata = row_group_meta_data.columns[0].meta_data.as_ref();
+                match first_column_metadata {
+                    None => Err(BoltReaderError::FileReaderError(String::from(
+                        "Unable to find the offset of the row group",
+                    ))),
+                    Some(first_column_metadata) => {
+                        let dictionary_page_offset =
+                            first_column_metadata.dictionary_page_offset.as_ref();
+                        match dictionary_page_offset {
+                            None => Ok(first_column_metadata.data_page_offset),
+                            Some(dictionary_page_offset) => Ok(*dictionary_page_offset),
+                        }
+                    }
+                }
+            }
+
+            Some(row_group_file_offset) => Ok(row_group_file_offset),
+        }
     }
 
     pub fn prepare_result_bridge(
