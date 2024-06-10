@@ -28,15 +28,18 @@ use crate::page_reader::data_page_v1::boolean_data_page_v1::BooleanDataPageReade
 use crate::page_reader::data_page_v1::data_page_base::{
     get_data_page_covered_range, get_data_page_remaining_range, DataPage, DataPageEnum,
 };
+use crate::page_reader::data_page_v1::plain_data_page_byte_array_v1::PlainDataPageReaderByteArrayV1;
 use crate::page_reader::data_page_v1::plain_data_page_float32_v1::PlainDataPageReaderFloat32V1;
 use crate::page_reader::data_page_v1::plain_data_page_float64_v1::PlainDataPageReaderFloat64V1;
 use crate::page_reader::data_page_v1::plain_data_page_int32_v1::PlainDataPageReaderInt32V1;
 use crate::page_reader::data_page_v1::plain_data_page_int64_v1::PlainDataPageReaderInt64V1;
+use crate::page_reader::data_page_v1::rle_bp_data_page_byte_array_v1::RleBpDataPageReaderByteArrayV1;
 use crate::page_reader::data_page_v1::rle_bp_data_page_float32_v1::RleBpDataPageReaderFloat32V1;
 use crate::page_reader::data_page_v1::rle_bp_data_page_float64_v1::RleBpDataPageReaderFloat64V1;
 use crate::page_reader::data_page_v1::rle_bp_data_page_int32_v1::RleBpDataPageReaderInt32V1;
 use crate::page_reader::data_page_v1::rle_bp_data_page_int64_v1::RleBpDataPageReaderInt64V1;
 use crate::page_reader::dictionary_page::dictionary_page_base::DictionaryPageEnum;
+use crate::page_reader::dictionary_page::dictionary_page_byte_array::DictionaryPageByteArray;
 use crate::page_reader::dictionary_page::dictionary_page_float32::DictionaryPageFloat32;
 use crate::page_reader::dictionary_page::dictionary_page_float32_with_filters::DictionaryPageWithFilterFloat32;
 use crate::page_reader::dictionary_page::dictionary_page_float64::DictionaryPageFloat64;
@@ -307,107 +310,9 @@ impl<'a> PrimitiveColumnReader<'a> {
         decompressor.decompress(buffer, compressed_size)
     }
 
-    pub fn load_uncompressed_dictionary_page(
+    pub fn load_dictionary_page(
         &mut self,
-        first_page_header: &PageHeader,
-    ) -> Result<(), BoltReaderError> {
-        self.dictionary_page = match self.physical_data_type {
-            PhysicalDataType::Int32 => match self.filter {
-                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageInt32(
-                    DictionaryPageInt32::new(
-                        first_page_header,
-                        &mut self.buffer,
-                        4,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                    )?,
-                ))),
-                Some(filter) => Some(Rc::from(DictionaryPageEnum::DictionaryPageWithFilterInt32(
-                    DictionaryPageWithFilterInt32::new(
-                        first_page_header,
-                        &mut self.buffer,
-                        4,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                        filter,
-                    )?,
-                ))),
-            },
-            PhysicalDataType::Int64 => match self.filter {
-                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageInt64(
-                    DictionaryPageInt64::new(
-                        first_page_header,
-                        &mut self.buffer,
-                        8,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                    )?,
-                ))),
-                Some(filter) => Some(Rc::from(DictionaryPageEnum::DictionaryPageWithFilterInt64(
-                    DictionaryPageWithFilterInt64::new(
-                        first_page_header,
-                        &mut self.buffer,
-                        8,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                        filter,
-                    )?,
-                ))),
-            },
-            PhysicalDataType::Float32 => match self.filter {
-                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageFloat32(
-                    DictionaryPageFloat32::new(
-                        first_page_header,
-                        &mut self.buffer,
-                        4,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                    )?,
-                ))),
-                Some(filter) => Some(Rc::from(
-                    DictionaryPageEnum::DictionaryPageWithFilterFloat32(
-                        DictionaryPageWithFilterFloat32::new(
-                            first_page_header,
-                            &mut self.buffer,
-                            4,
-                            true,
-                            BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                            filter,
-                        )?,
-                    ),
-                )),
-            },
-            PhysicalDataType::Float64 => match self.filter {
-                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageFloat64(
-                    DictionaryPageFloat64::new(
-                        first_page_header,
-                        &mut self.buffer,
-                        8,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                    )?,
-                ))),
-                Some(filter) => Some(Rc::from(
-                    DictionaryPageEnum::DictionaryPageWithFilterFloat64(
-                        DictionaryPageWithFilterFloat64::new(
-                            first_page_header,
-                            &mut self.buffer,
-                            8,
-                            true,
-                            BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                            filter,
-                        )?,
-                    ),
-                )),
-            },
-            _ => None,
-        };
-
-        Ok(())
-    }
-
-    pub fn load_compressed_dictionary_page(
-        &mut self,
+        as_reference: bool,
         first_page_header: &PageHeader,
         decompressed_buffer: BufferEnum,
     ) -> Result<(), BoltReaderError> {
@@ -418,7 +323,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         first_page_header,
                         &mut self.buffer,
                         4,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                     )?,
                 ))),
@@ -427,7 +332,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         first_page_header,
                         &mut self.buffer,
                         4,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                         filter,
                     )?,
@@ -439,7 +344,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         first_page_header,
                         &mut self.buffer,
                         8,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                     )?,
                 ))),
@@ -448,7 +353,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         first_page_header,
                         &mut self.buffer,
                         8,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                         filter,
                     )?,
@@ -460,7 +365,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         first_page_header,
                         &mut self.buffer,
                         4,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                     )?,
                 ))),
@@ -470,7 +375,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                             first_page_header,
                             &mut self.buffer,
                             4,
-                            false,
+                            as_reference,
                             decompressed_buffer,
                             filter,
                         )?,
@@ -483,7 +388,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         first_page_header,
                         &mut self.buffer,
                         8,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                     )?,
                 ))),
@@ -493,12 +398,27 @@ impl<'a> PrimitiveColumnReader<'a> {
                             first_page_header,
                             &mut self.buffer,
                             8,
-                            false,
+                            as_reference,
                             decompressed_buffer,
                             filter,
                         )?,
                     ),
                 )),
+            },
+            PhysicalDataType::ByteArray => match self.filter {
+                None => Some(Rc::from(DictionaryPageEnum::DictionaryPageByteArray(
+                    DictionaryPageByteArray::new(
+                        first_page_header,
+                        &mut self.buffer,
+                        1,
+                        as_reference,
+                        false,
+                        decompressed_buffer,
+                    )?,
+                ))),
+                Some(_filter) => {
+                    return Err(BoltReaderError::NotYetImplementedError(String::from("Byte Array reader with filter is not yet implemented for Byte Array Data Page Reader. This will be implemented together with String support.")));
+                }
             },
             _ => None,
         };
@@ -520,6 +440,7 @@ impl<'a> PrimitiveColumnReader<'a> {
             Type::INT64 => PhysicalDataType::Int64,
             Type::FLOAT => PhysicalDataType::Float32,
             Type::DOUBLE => PhysicalDataType::Float64,
+            Type::BYTE_ARRAY => PhysicalDataType::ByteArray,
             _ => {
                 return Err(BoltReaderError::NotYetImplementedError(format!(
                     "Primitive Type Column: Type {} not yet implemented",
@@ -529,7 +450,7 @@ impl<'a> PrimitiveColumnReader<'a> {
         };
 
         self.type_size = match column_meta_data.type_ {
-            Type::BOOLEAN => 1,
+            Type::BOOLEAN | Type::BYTE_ARRAY => 1,
             Type::INT32 | Type::FLOAT => 4,
             Type::INT64 | Type::DOUBLE => 8,
             _ => {
@@ -548,7 +469,13 @@ impl<'a> PrimitiveColumnReader<'a> {
                 if first_page_header.dictionary_page_header.is_some() {
                     match self.compression_codec {
                         CompressionCodec::UNCOMPRESSED => {
-                            self.load_uncompressed_dictionary_page(&first_page_header)?;
+                            self.load_dictionary_page(
+                                true,
+                                &first_page_header,
+                                BufferEnum::DirectByteBuffer(
+                                    DirectByteBuffer::from_vec(Vec::new()),
+                                ),
+                            )?;
                         }
                         _ => {
                             let decompressed_buffer = Self::decompress_data(
@@ -557,7 +484,8 @@ impl<'a> PrimitiveColumnReader<'a> {
                                 first_page_header.compressed_page_size as usize,
                             )?;
 
-                            self.load_compressed_dictionary_page(
+                            self.load_dictionary_page(
+                                false,
                                 &first_page_header,
                                 decompressed_buffer,
                             )?;
@@ -585,196 +513,20 @@ impl<'a> PrimitiveColumnReader<'a> {
         Ok(())
     }
 
-    pub fn load_uncompressed_data_page(
+    pub fn load_data_page_internal(
         &mut self,
         page_header: &PageHeader,
         rep_rle_bp: bool,
         def_rle_bp: bool,
+        as_reference: bool,
+        mut decompressed_buffer: BufferEnum,
     ) -> Result<(), BoltReaderError> {
-        let data_page_header = page_header.data_page_header.as_ref().unwrap();
-        let rpos = self.buffer.get_rpos();
-        let validity = RepDefParser::parse_rep_def(
-            &mut self.buffer,
-            data_page_header.num_values as usize,
-            self.max_rep,
-            rep_rle_bp,
-            self.max_def,
-            def_rle_bp,
-        )?;
-
-        let data_size = page_header.uncompressed_page_size - (self.buffer.get_rpos() - rpos) as i32;
-
-        match &page_header.data_page_header {
-            Some(data_page_v1) => data_page_v1,
-            None => {
-                return Err(BoltReaderError::FixedLengthDataPageError(String::from(
-                    "Error when reading Data Page V1 Header",
-                )))
-            }
+        let buffer = if as_reference {
+            &mut self.buffer
+        } else {
+            &mut decompressed_buffer
         };
 
-        let is_dictionary_encoded = (page_header.data_page_header.as_ref().unwrap().encoding
-            == Encoding::PLAIN_DICTIONARY)
-            || (page_header.data_page_header.as_ref().unwrap().encoding
-                == Encoding::RLE_DICTIONARY);
-
-        if self.dictionary_page.is_some() && is_dictionary_encoded {
-            self.current_data_page = match self.physical_data_type {
-                PhysicalDataType::Boolean => None,
-
-                PhysicalDataType::Int32 => Some(DataPageEnum::RleBpDataPageReaderInt32V1(
-                    RleBpDataPageReaderInt32V1::new(
-                        page_header,
-                        &mut self.buffer,
-                        self.data_page_offset,
-                        self.type_size,
-                        validity.0,
-                        data_size as usize,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                        self.filter,
-                        validity.1,
-                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
-                    )?,
-                )),
-                PhysicalDataType::Int64 => Some(DataPageEnum::RleBpDataPageReaderInt64V1(
-                    RleBpDataPageReaderInt64V1::new(
-                        page_header,
-                        &mut self.buffer,
-                        self.data_page_offset,
-                        self.type_size,
-                        validity.0,
-                        data_size as usize,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                        self.filter,
-                        validity.1,
-                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
-                    )?,
-                )),
-                PhysicalDataType::Float32 => Some(DataPageEnum::RleBpDataPageReaderFloat32V1(
-                    RleBpDataPageReaderFloat32V1::new(
-                        page_header,
-                        &mut self.buffer,
-                        self.data_page_offset,
-                        self.type_size,
-                        validity.0,
-                        data_size as usize,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                        self.filter,
-                        validity.1,
-                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
-                    )?,
-                )),
-                PhysicalDataType::Float64 => Some(DataPageEnum::RleBpDataPageReaderFloat64V1(
-                    RleBpDataPageReaderFloat64V1::new(
-                        page_header,
-                        &mut self.buffer,
-                        self.data_page_offset,
-                        self.type_size,
-                        validity.0,
-                        data_size as usize,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                        self.filter,
-                        validity.1,
-                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
-                    )?,
-                )),
-                PhysicalDataType::None => None,
-            };
-        } else {
-            self.current_data_page = match self.physical_data_type {
-                PhysicalDataType::Boolean => Some(DataPageEnum::BooleanDataPageReaderV1(
-                    BooleanDataPageReaderV1::new(
-                        page_header,
-                        &mut self.buffer,
-                        self.data_page_offset,
-                        self.type_size,
-                        validity.0,
-                        data_size as usize,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                        self.filter,
-                        validity.1,
-                    )?,
-                )),
-
-                PhysicalDataType::Int32 => Some(DataPageEnum::PlainDataPageReaderInt32V1(
-                    PlainDataPageReaderInt32V1::new(
-                        page_header,
-                        &mut self.buffer,
-                        self.data_page_offset,
-                        self.type_size,
-                        validity.0,
-                        data_size as usize,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                        self.filter,
-                        validity.1,
-                    )?,
-                )),
-                PhysicalDataType::Int64 => Some(DataPageEnum::PlainDataPageReaderInt64V1(
-                    PlainDataPageReaderInt64V1::new(
-                        page_header,
-                        &mut self.buffer,
-                        self.data_page_offset,
-                        self.type_size,
-                        validity.0,
-                        data_size as usize,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                        self.filter,
-                        validity.1,
-                    )?,
-                )),
-                PhysicalDataType::Float32 => Some(DataPageEnum::PlainDataPageReaderFloat32V1(
-                    PlainDataPageReaderFloat32V1::new(
-                        page_header,
-                        &mut self.buffer,
-                        self.data_page_offset,
-                        self.type_size,
-                        validity.0,
-                        data_size as usize,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                        self.filter,
-                        validity.1,
-                    )?,
-                )),
-                PhysicalDataType::Float64 => Some(DataPageEnum::PlainDataPageReaderFloat64V1(
-                    PlainDataPageReaderFloat64V1::new(
-                        page_header,
-                        &mut self.buffer,
-                        self.data_page_offset,
-                        self.type_size,
-                        validity.0,
-                        data_size as usize,
-                        true,
-                        BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
-                        self.filter,
-                        validity.1,
-                    )?,
-                )),
-                PhysicalDataType::None => None,
-            };
-        }
-
-        // For uncompressed conditions, we move the index back for zero copy.
-        self.buffer.set_rpos(rpos);
-
-        Ok(())
-    }
-
-    pub fn load_compressed_data_page(
-        &mut self,
-        mut decompressed_buffer: BufferEnum,
-        page_header: &PageHeader,
-        rep_rle_bp: bool,
-        def_rle_bp: bool,
-    ) -> Result<(), BoltReaderError> {
-        let buffer = &mut decompressed_buffer;
         let data_page_header = page_header.data_page_header.as_ref().unwrap();
         let rpos = buffer.get_rpos();
         let validity = RepDefParser::parse_rep_def(
@@ -814,7 +566,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         self.type_size,
                         validity.0,
                         data_size as usize,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                         self.filter,
                         validity.1,
@@ -829,7 +581,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         self.type_size,
                         validity.0,
                         data_size as usize,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                         self.filter,
                         validity.1,
@@ -844,7 +596,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         self.type_size,
                         validity.0,
                         data_size as usize,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                         self.filter,
                         validity.1,
@@ -859,6 +611,22 @@ impl<'a> PrimitiveColumnReader<'a> {
                         self.type_size,
                         validity.0,
                         data_size as usize,
+                        as_reference,
+                        decompressed_buffer,
+                        self.filter,
+                        validity.1,
+                        Rc::clone(self.dictionary_page.as_ref().unwrap()),
+                    )?,
+                )),
+                PhysicalDataType::ByteArray => Some(DataPageEnum::RleBpDataPageReaderByteArrayV1(
+                    RleBpDataPageReaderByteArrayV1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        as_reference,
                         false,
                         decompressed_buffer,
                         self.filter,
@@ -866,6 +634,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         Rc::clone(self.dictionary_page.as_ref().unwrap()),
                     )?,
                 )),
+
                 PhysicalDataType::None => None,
             };
         } else {
@@ -878,7 +647,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         self.type_size,
                         validity.0,
                         data_size as usize,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                         self.filter,
                         validity.1,
@@ -893,7 +662,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         self.type_size,
                         validity.0,
                         data_size as usize,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                         self.filter,
                         validity.1,
@@ -907,7 +676,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         self.type_size,
                         validity.0,
                         data_size as usize,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                         self.filter,
                         validity.1,
@@ -921,7 +690,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                         self.type_size,
                         validity.0,
                         data_size as usize,
-                        false,
+                        as_reference,
                         decompressed_buffer,
                         self.filter,
                         validity.1,
@@ -935,14 +704,35 @@ impl<'a> PrimitiveColumnReader<'a> {
                         self.type_size,
                         validity.0,
                         data_size as usize,
+                        as_reference,
+                        decompressed_buffer,
+                        self.filter,
+                        validity.1,
+                    )?,
+                )),
+                PhysicalDataType::ByteArray => Some(DataPageEnum::PlainDataPageReaderByteArrayV1(
+                    PlainDataPageReaderByteArrayV1::new(
+                        page_header,
+                        &mut self.buffer,
+                        self.data_page_offset,
+                        self.type_size,
+                        validity.0,
+                        data_size as usize,
+                        as_reference,
                         false,
                         decompressed_buffer,
                         self.filter,
                         validity.1,
                     )?,
                 )),
+
                 PhysicalDataType::None => None,
             };
+        }
+
+        if as_reference {
+            // For uncompressed conditions, we move the index back for zero copy.
+            self.buffer.set_rpos(rpos);
         }
 
         Ok(())
@@ -960,7 +750,13 @@ impl<'a> PrimitiveColumnReader<'a> {
 
         match self.compression_codec {
             CompressionCodec::UNCOMPRESSED => {
-                self.load_uncompressed_data_page(&page_header, rep_rle_bp, def_rle_bp)?;
+                self.load_data_page_internal(
+                    &page_header,
+                    rep_rle_bp,
+                    def_rle_bp,
+                    true,
+                    BufferEnum::DirectByteBuffer(DirectByteBuffer::from_vec(Vec::new())),
+                )?;
             }
             _ => {
                 let decompressed_buffer = Self::decompress_data(
@@ -969,11 +765,12 @@ impl<'a> PrimitiveColumnReader<'a> {
                     page_header.compressed_page_size as usize,
                 )?;
 
-                self.load_compressed_data_page(
-                    decompressed_buffer,
+                self.load_data_page_internal(
                     &page_header,
                     rep_rle_bp,
                     def_rle_bp,
+                    false,
+                    decompressed_buffer,
                 )?;
             }
         }
@@ -1019,6 +816,7 @@ mod tests {
 
     use rand::{thread_rng, Rng};
 
+    use crate::bridge::byte_array_bridge::ByteArrayBridge;
     use crate::bridge::float64_bridge::Float64Bridge;
     use crate::bridge::int64_bridge::Int64Bridge;
     use crate::bridge::result_bridge::ResultBridge;
@@ -1036,9 +834,10 @@ mod tests {
     use crate::utils::local_file_loader::LocalFileLoader;
     use crate::utils::row_range_set::{RowRange, RowRangeSet};
     use crate::utils::test_utils::test_utils::{
+        verify_plain_byte_array_non_null_result, verify_plain_byte_array_nullable_result,
         verify_plain_float64_non_null_result, verify_plain_float64_nullable_result,
-        verify_plain_int64_non_null_result, verify_rle_bp_float64_nullable_result,
-        verify_rle_bp_int64_non_null_result,
+        verify_plain_int64_non_null_result, verify_rle_bp_byte_array_nullable_result,
+        verify_rle_bp_float64_nullable_result, verify_rle_bp_int64_non_null_result,
     };
 
     const STEAMING_BUFFER_SIZE: usize = 1 << 8;
@@ -2308,6 +2107,313 @@ mod tests {
                 begin = end;
             }
             begin_base = begin_base << 4;
+        }
+    }
+
+    #[test]
+    fn test_reading_plain_string_column_from_beginning() {
+        let path = String::from("src/sample_files/plain_string_column.parquet");
+
+        let num_values = 1000000;
+        let num_tests = 100;
+
+        for _num_test in 0..num_tests {
+            let mut begin = 0;
+            let step = get_random_number_in_range(15);
+            let buffer = load_column_to_direct_buffer(&path);
+            let res = load_column_reader(&path, buffer, None);
+            assert!(res.is_ok());
+            let mut column_reader = res.unwrap();
+
+            while begin < num_values {
+                let end = min(begin + step, num_values);
+                let to_read = RowRange::new(begin as usize, end as usize);
+                let offset = 0;
+                let mut result_row_range_set = RowRangeSet::new(offset);
+                let mut raw_bridge = ByteArrayBridge::new(false, step as usize);
+
+                let res =
+                    column_reader.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
+                assert!(res.is_ok());
+                verify_plain_byte_array_non_null_result(&result_row_range_set, &raw_bridge);
+
+                begin = end;
+            }
+        }
+    }
+
+    #[test]
+    fn test_reading_plain_string_column_from_middle() {
+        let path = String::from("src/sample_files/plain_string_column.parquet");
+
+        let num_values = 1000000;
+        let num_tests = 10;
+
+        for num_test in 0..num_tests {
+            let mut begin_base = 1;
+            while begin_base < num_values {
+                let mut begin = begin_base;
+                let step = get_random_number_in_range(15) + num_test;
+                let buffer = load_column_to_direct_buffer(&path);
+                let res = load_column_reader(&path, buffer, None);
+                assert!(res.is_ok());
+                let mut column_reader = res.unwrap();
+
+                while begin < num_values {
+                    let end = min(begin + step, num_values);
+                    let to_read = RowRange::new(begin as usize, end as usize);
+                    let offset = 0;
+                    let mut result_row_range_set = RowRangeSet::new(offset);
+                    let mut raw_bridge = ByteArrayBridge::new(false, step as usize);
+
+                    let res = column_reader.read(
+                        to_read,
+                        offset,
+                        &mut result_row_range_set,
+                        &mut raw_bridge,
+                    );
+                    assert!(res.is_ok());
+                    verify_plain_byte_array_non_null_result(&result_row_range_set, &raw_bridge);
+
+                    begin = end;
+                }
+                begin_base = begin_base << 1;
+            }
+        }
+    }
+
+    #[test]
+    fn test_reading_plain_string_column_from_beginning_streaming_buffer() {
+        let path = String::from("src/sample_files/plain_string_column.parquet");
+        let num_values = 1000000;
+
+        for shift in 12..16 {
+            let buffer_size = 1 << shift;
+            let mut begin = 0;
+            let step = get_random_number_in_range(15);
+            let res = LocalFileLoader::new(&path);
+            assert!(res.is_ok());
+            let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+            let buffer = load_column_to_streaming_buffer(file, buffer_size);
+            let res = load_column_reader(&path, buffer, None);
+            assert!(res.is_ok());
+            let mut column_reader = res.unwrap();
+
+            while begin < num_values {
+                let end = min(begin + step, num_values);
+                let to_read = RowRange::new(begin as usize, end as usize);
+                let offset = 0;
+                let mut result_row_range_set = RowRangeSet::new(offset);
+                let mut raw_bridge = ByteArrayBridge::new(false, step as usize);
+
+                let res =
+                    column_reader.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
+                assert!(res.is_ok());
+
+                verify_plain_byte_array_non_null_result(&result_row_range_set, &raw_bridge);
+
+                begin = end;
+            }
+        }
+    }
+
+    #[test]
+    fn test_reading_plain_string_column_from_middle_streaming_buffer() {
+        let path = String::from("src/sample_files/plain_string_column.parquet");
+        let num_values = 1000000;
+
+        for shift in 12..16 {
+            let buffer_size = 1 << shift;
+            let mut begin_base = 1;
+            while begin_base < num_values {
+                let mut begin = begin_base;
+                let step = get_random_number_in_range(15) + shift;
+                let res = LocalFileLoader::new(&path);
+                assert!(res.is_ok());
+                let file = Rc::from(FileLoaderEnum::LocalFileLoader(res.unwrap()));
+                let buffer = load_column_to_streaming_buffer(file, buffer_size);
+                let res = load_column_reader(&path, buffer, None);
+                assert!(res.is_ok());
+                let mut column_reader = res.unwrap();
+
+                while begin < num_values {
+                    let end = min(begin + step, num_values);
+                    let to_read = RowRange::new(begin as usize, end as usize);
+                    let offset = 0;
+                    let mut result_row_range_set = RowRangeSet::new(offset);
+                    let mut raw_bridge = ByteArrayBridge::new(false, step as usize);
+
+                    let res = column_reader.read(
+                        to_read,
+                        offset,
+                        &mut result_row_range_set,
+                        &mut raw_bridge,
+                    );
+                    assert!(res.is_ok());
+
+                    verify_plain_byte_array_non_null_result(&result_row_range_set, &raw_bridge);
+
+                    begin = end;
+                }
+                begin_base = begin_base << 1;
+            }
+        }
+    }
+
+    #[test]
+    fn test_reading_nullalbe_plain_string_column_from_beginning() {
+        let path = String::from("src/sample_files/plain_string_column_with_nulls.parquet");
+
+        let num_values = 1000000;
+        let num_tests = 10;
+
+        for _num_test in 0..num_tests {
+            let mut begin = 0;
+            let step = get_random_number_in_range(15);
+            let buffer = load_column_to_direct_buffer(&path);
+            let res = load_column_reader(&path, buffer, None);
+            assert!(res.is_ok());
+            let mut column_reader = res.unwrap();
+
+            while begin < num_values {
+                let end = min(begin + step, num_values);
+                let to_read = RowRange::new(begin as usize, end as usize);
+                let offset = 0;
+                let mut result_row_range_set = RowRangeSet::new(offset);
+                let mut raw_bridge = ByteArrayBridge::new(false, step as usize);
+
+                let res =
+                    column_reader.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
+                assert!(res.is_ok());
+
+                if !raw_bridge.is_empty() {
+                    verify_plain_byte_array_nullable_result(&result_row_range_set, &raw_bridge);
+                }
+                begin = end;
+            }
+        }
+    }
+
+    #[test]
+    fn test_reading_nullalbe_plain_string_column_from_middle() {
+        let path = String::from("src/sample_files/plain_string_column_with_nulls.parquet");
+
+        let num_values = 1000000;
+        let num_tests = 5;
+
+        for num_test in 0..num_tests {
+            let mut begin_base = 1;
+            while begin_base < num_values {
+                let mut begin = begin_base;
+                let step = get_random_number_in_range(15) + num_test;
+                let buffer = load_column_to_direct_buffer(&path);
+                let res = load_column_reader(&path, buffer, None);
+                assert!(res.is_ok());
+                let mut column_reader = res.unwrap();
+
+                while begin < num_values {
+                    let end = min(begin + step, num_values);
+                    let to_read = RowRange::new(begin as usize, end as usize);
+                    let offset = 0;
+                    let mut result_row_range_set = RowRangeSet::new(offset);
+                    let mut raw_bridge = ByteArrayBridge::new(false, step as usize);
+
+                    let res = column_reader.read(
+                        to_read,
+                        offset,
+                        &mut result_row_range_set,
+                        &mut raw_bridge,
+                    );
+                    assert!(res.is_ok());
+
+                    if !raw_bridge.is_empty() {
+                        verify_plain_byte_array_nullable_result(&result_row_range_set, &raw_bridge);
+                    }
+
+                    begin = end;
+                }
+                begin_base = begin_base << 1;
+            }
+        }
+    }
+
+    #[test]
+    fn test_reading_nullalbe_rle_bp_string_column_from_beginning() {
+        let path = String::from("src/sample_files/rle_bp_string_column_with_nulls.parquet");
+
+        let num_values = 1000000;
+        let num_tests = 10;
+
+        for _num_test in 0..num_tests {
+            let mut begin = 0;
+            let step = get_random_number_in_range(15);
+            let buffer = load_column_to_direct_buffer(&path);
+            let res = load_column_reader(&path, buffer, None);
+            assert!(res.is_ok());
+            let mut column_reader = res.unwrap();
+
+            while begin < num_values {
+                let end = min(begin + step, num_values);
+                let to_read = RowRange::new(begin as usize, end as usize);
+                let offset = 0;
+                let mut result_row_range_set = RowRangeSet::new(offset);
+                let mut raw_bridge = ByteArrayBridge::new(false, step as usize);
+
+                let res =
+                    column_reader.read(to_read, offset, &mut result_row_range_set, &mut raw_bridge);
+                assert!(res.is_ok());
+
+                if !raw_bridge.is_empty() {
+                    verify_rle_bp_byte_array_nullable_result(&result_row_range_set, &raw_bridge);
+                }
+                begin = end;
+            }
+        }
+    }
+
+    #[test]
+    fn test_reading_nullalbe_rle_bp_string_column_from_middle() {
+        let path = String::from("src/sample_files/rle_bp_string_column_with_nulls.parquet");
+
+        let num_values = 1000000;
+        let num_tests = 5;
+
+        for num_test in 0..num_tests {
+            let mut begin_base = 1;
+            while begin_base < num_values {
+                let mut begin = begin_base;
+                let step = get_random_number_in_range(15) + num_test;
+                let buffer = load_column_to_direct_buffer(&path);
+                let res = load_column_reader(&path, buffer, None);
+                assert!(res.is_ok());
+                let mut column_reader = res.unwrap();
+
+                while begin < num_values {
+                    let end = min(begin + step, num_values);
+                    let to_read = RowRange::new(begin as usize, end as usize);
+                    let offset = 0;
+                    let mut result_row_range_set = RowRangeSet::new(offset);
+                    let mut raw_bridge = ByteArrayBridge::new(false, step as usize);
+
+                    let res = column_reader.read(
+                        to_read,
+                        offset,
+                        &mut result_row_range_set,
+                        &mut raw_bridge,
+                    );
+                    assert!(res.is_ok());
+
+                    if !raw_bridge.is_empty() {
+                        verify_rle_bp_byte_array_nullable_result(
+                            &result_row_range_set,
+                            &raw_bridge,
+                        );
+                    }
+
+                    begin = end;
+                }
+                begin_base = begin_base << 1;
+            }
         }
     }
 }

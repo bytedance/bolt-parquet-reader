@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::bridge::byte_array_bridge::ByteArray;
+use crate::page_reader::dictionary_page::dictionary_page_byte_array::DictionaryPageByteArray;
 use crate::page_reader::dictionary_page::dictionary_page_float32::DictionaryPageFloat32;
 use crate::page_reader::dictionary_page::dictionary_page_float32_with_filters::DictionaryPageWithFilterFloat32;
 use crate::page_reader::dictionary_page::dictionary_page_float64::DictionaryPageFloat64;
@@ -27,6 +29,7 @@ pub enum DictionaryPageEnum {
     DictionaryPageFloat32(DictionaryPageFloat32),
     DictionaryPageInt64(DictionaryPageInt64),
     DictionaryPageFloat64(DictionaryPageFloat64),
+    DictionaryPageByteArray(DictionaryPageByteArray),
     DictionaryPageWithFilterInt32(DictionaryPageWithFilterInt32),
     DictionaryPageWithFilterFloat32(DictionaryPageWithFilterFloat32),
     DictionaryPageWithFilterInt64(DictionaryPageWithFilterInt64),
@@ -52,6 +55,10 @@ pub trait DictionaryPageNew {
         f64::default()
     }
 
+    fn find_byte_array(&self, _index: usize) -> ByteArray {
+        ByteArray::default()
+    }
+
     fn get_num_values(&self) -> usize;
 
     fn get_type_size(&self) -> usize;
@@ -72,6 +79,9 @@ impl DictionaryPageNew for DictionaryPageEnum {
                 dictionary_page.validate(index)
             }
             DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.validate(index)
+            }
+            DictionaryPageEnum::DictionaryPageByteArray(dictionary_page) => {
                 dictionary_page.validate(index)
             }
             DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
@@ -103,6 +113,9 @@ impl DictionaryPageNew for DictionaryPageEnum {
             DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
                 dictionary_page.find_int32(index)
             }
+            DictionaryPageEnum::DictionaryPageByteArray(dictionary_page) => {
+                dictionary_page.find_int32(index)
+            }
             DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
                 dictionary_page.find_int32(index)
             }
@@ -130,6 +143,9 @@ impl DictionaryPageNew for DictionaryPageEnum {
                 dictionary_page.find_float32(index)
             }
             DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.find_float32(index)
+            }
+            DictionaryPageEnum::DictionaryPageByteArray(dictionary_page) => {
                 dictionary_page.find_float32(index)
             }
             DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
@@ -161,6 +177,9 @@ impl DictionaryPageNew for DictionaryPageEnum {
             DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
                 dictionary_page.find_int64(index)
             }
+            DictionaryPageEnum::DictionaryPageByteArray(dictionary_page) => {
+                dictionary_page.find_int64(index)
+            }
             DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
                 dictionary_page.find_int64(index)
             }
@@ -190,6 +209,9 @@ impl DictionaryPageNew for DictionaryPageEnum {
             DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
                 dictionary_page.find_float64(index)
             }
+            DictionaryPageEnum::DictionaryPageByteArray(dictionary_page) => {
+                dictionary_page.find_float64(index)
+            }
             DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
                 dictionary_page.find_float64(index)
             }
@@ -201,6 +223,38 @@ impl DictionaryPageNew for DictionaryPageEnum {
             }
             DictionaryPageEnum::DictionaryPageWithFilterFloat64(dictionary_page) => {
                 dictionary_page.find_float64(index)
+            }
+        }
+    }
+
+    fn find_byte_array(&self, index: usize) -> ByteArray {
+        match self {
+            DictionaryPageEnum::DictionaryPageInt32(dictionary_page) => {
+                dictionary_page.find_byte_array(index)
+            }
+            DictionaryPageEnum::DictionaryPageFloat32(dictionary_page) => {
+                dictionary_page.find_byte_array(index)
+            }
+            DictionaryPageEnum::DictionaryPageInt64(dictionary_page) => {
+                dictionary_page.find_byte_array(index)
+            }
+            DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.find_byte_array(index)
+            }
+            DictionaryPageEnum::DictionaryPageByteArray(dictionary_page) => {
+                dictionary_page.find_byte_array(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
+                dictionary_page.find_byte_array(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat32(dictionary_page) => {
+                dictionary_page.find_byte_array(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterInt64(dictionary_page) => {
+                dictionary_page.find_byte_array(index)
+            }
+            DictionaryPageEnum::DictionaryPageWithFilterFloat64(dictionary_page) => {
+                dictionary_page.find_byte_array(index)
             }
         }
     }
@@ -217,6 +271,9 @@ impl DictionaryPageNew for DictionaryPageEnum {
                 dictionary_page.get_num_values()
             }
             DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.get_num_values()
+            }
+            DictionaryPageEnum::DictionaryPageByteArray(dictionary_page) => {
                 dictionary_page.get_num_values()
             }
             DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
@@ -248,6 +305,9 @@ impl DictionaryPageNew for DictionaryPageEnum {
             DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
                 dictionary_page.get_type_size()
             }
+            DictionaryPageEnum::DictionaryPageByteArray(dictionary_page) => {
+                dictionary_page.get_type_size()
+            }
             DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {
                 dictionary_page.get_type_size()
             }
@@ -275,6 +335,9 @@ impl DictionaryPageNew for DictionaryPageEnum {
                 dictionary_page.is_zero_copied()
             }
             DictionaryPageEnum::DictionaryPageFloat64(dictionary_page) => {
+                dictionary_page.is_zero_copied()
+            }
+            DictionaryPageEnum::DictionaryPageByteArray(dictionary_page) => {
                 dictionary_page.is_zero_copied()
             }
             DictionaryPageEnum::DictionaryPageWithFilterInt32(dictionary_page) => {

@@ -157,6 +157,7 @@ mod tests {
     const INT64_COLUMN: &str = "bigint";
     const FLOAT32_COLUMN: &str = "float";
     const FLOAT64_COLUMN: &str = "double";
+    const STRING_COLUMN: &str = "string";
 
     #[test]
     fn test_reading_file() {
@@ -170,6 +171,7 @@ mod tests {
         columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
         columns_to_read.insert(String::from(INT64_COLUMN), None);
         columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+        columns_to_read.insert(String::from(STRING_COLUMN), None);
 
         let res = LocalFileReader::from_local_file(&path.to_string(), columns_to_read);
         assert!(res.is_ok());

@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod dictionary_page_base;
+pub mod dictionary_page_byte_array;
 pub mod dictionary_page_float32;
 pub mod dictionary_page_float32_with_filters;
 pub mod dictionary_page_float64;
@@ -22,5 +23,3 @@ pub mod dictionary_page_int32;
 pub mod dictionary_page_int32_with_filters;
 pub mod dictionary_page_int64;
 pub mod dictionary_page_int64_with_filters;
-pub mod fixed_length_dictionary_page;
-pub mod fixed_length_dictionary_page_with_filter;

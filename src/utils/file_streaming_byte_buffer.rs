@@ -176,7 +176,7 @@ impl ByteBufferBase for StreamingByteBuffer {
         let end = start + len;
         if start < self.buffer_offset || end > self.buffer_offset + self.direct_buffer_size {
             return Err(BoltReaderError::InternalError(format!(
-                "Slice out of DirectByteBuffer, file file_offset: {} size: {} bytes; Slice: [{}, {})",
+                "Slice out of FileStreamingBuffer, file file_offset: {} size: {} bytes; Slice: [{}, {})",
                 self.file_offset,
                 self.direct_buffer_size,
                 start,
@@ -265,7 +265,7 @@ impl ByteBufferBase for StreamingByteBuffer {
         {
             self.reload(start)?;
         } else {
-            self.buffer.set_rpos(start % self.buffer_size);
+            self.buffer.set_rpos(start - self.buffer_offset);
         }
 
         let mut begin = start;

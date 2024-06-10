@@ -129,7 +129,7 @@ impl DictionaryPageWithFilterFloat32 {
             ));
         }
 
-        if buffer.len() < (num_values) * type_size {
+        if page_header.uncompressed_page_size as usize != (num_values) * type_size {
             return Err(BoltReaderError::FixedLengthDictionaryPageError(
                 String::from("Corrupted Dictionary Page"),
             ));

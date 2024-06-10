@@ -18,12 +18,13 @@ use crate::utils::exceptions::BoltReaderError;
 use crate::utils::row_range_set::{RowRange, RowRangeSet};
 
 pub enum PhysicalDataType {
+    None,
     Boolean,
     Int32,
     Int64,
     Float32,
     Float64,
-    None,
+    ByteArray,
 }
 
 pub trait ColumnReader {
