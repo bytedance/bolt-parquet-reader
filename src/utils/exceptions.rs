@@ -40,6 +40,7 @@ pub enum BoltReaderError {
     PrimitiveColumnReaderError(String),
     RowGroupReaderError(String),
     FileReaderError(String),
+    DecomrpessionError(String),
 }
 
 impl Error for BoltReaderError {}
@@ -100,6 +101,9 @@ impl Display for BoltReaderError {
             }
             BoltReaderError::FileReaderError(e) => {
                 writeln!(f, "File Reader Error: {e}")
+            }
+            BoltReaderError::DecomrpessionError(e) => {
+                writeln!(f, "Decompression Error: {e}")
             }
         }
     }

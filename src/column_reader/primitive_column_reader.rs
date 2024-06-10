@@ -49,7 +49,9 @@ use crate::page_reader::dictionary_page::dictionary_page_int32_with_filters::Dic
 use crate::page_reader::dictionary_page::dictionary_page_int64::DictionaryPageInt64;
 use crate::page_reader::dictionary_page::dictionary_page_int64_with_filters::DictionaryPageWithFilterInt64;
 use crate::utils::byte_buffer_base::{BufferEnum, ByteBufferBase};
-use crate::utils::decompressor::{Decompress, DecompressorEnum, GzipDecompressor};
+use crate::utils::decompressor::{
+    Decompress, DecompressorEnum, GzipDecompressor, SnappyDecompressor,
+};
 use crate::utils::direct_byte_buffer::DirectByteBuffer;
 use crate::utils::exceptions::BoltReaderError;
 use crate::utils::rep_def_parser::RepDefParser;
@@ -295,8 +297,12 @@ impl<'a> PrimitiveColumnReader<'a> {
         compression_codec: CompressionCodec,
         buffer: &mut dyn ByteBufferBase,
         compressed_size: usize,
+        uncompressed_size: usize,
     ) -> Result<BufferEnum, BoltReaderError> {
         let decompressor = match compression_codec {
+            CompressionCodec::SNAPPY => {
+                DecompressorEnum::SnappyDecompressor(SnappyDecompressor::default())
+            }
             CompressionCodec::GZIP => {
                 DecompressorEnum::GzipDecompressor(GzipDecompressor::default())
             }
@@ -307,7 +313,7 @@ impl<'a> PrimitiveColumnReader<'a> {
             }
         };
 
-        decompressor.decompress(buffer, compressed_size)
+        decompressor.decompress(buffer, compressed_size, uncompressed_size)
     }
 
     pub fn load_dictionary_page(
@@ -482,6 +488,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                                 self.compression_codec,
                                 &mut self.buffer,
                                 first_page_header.compressed_page_size as usize,
+                                first_page_header.uncompressed_page_size as usize,
                             )?;
 
                             self.load_dictionary_page(
@@ -763,6 +770,7 @@ impl<'a> PrimitiveColumnReader<'a> {
                     self.compression_codec,
                     &mut self.buffer,
                     page_header.compressed_page_size as usize,
+                    page_header.uncompressed_page_size as usize,
                 )?;
 
                 self.load_data_page_internal(

@@ -25,6 +25,7 @@ use crate::utils::exceptions::BoltReaderError;
 
 pub enum DecompressorEnum {
     GzipDecompressor(GzipDecompressor),
+    SnappyDecompressor(SnappyDecompressor),
 }
 
 pub trait Decompress {
@@ -32,6 +33,7 @@ pub trait Decompress {
         &self,
         buffer: &mut dyn ByteBufferBase,
         compressed_size: usize,
+        uncompressed_size: usize,
     ) -> Result<BufferEnum, BoltReaderError>;
 }
 
@@ -56,10 +58,14 @@ impl Decompress for DecompressorEnum {
         &self,
         buffer: &mut dyn ByteBufferBase,
         compressed_size: usize,
+        uncompressed_size: usize,
     ) -> Result<BufferEnum, BoltReaderError> {
         match self {
             DecompressorEnum::GzipDecompressor(decompressor) => {
-                decompressor.decompress(buffer, compressed_size)
+                decompressor.decompress(buffer, compressed_size, uncompressed_size)
+            }
+            DecompressorEnum::SnappyDecompressor(decompressor) => {
+                decompressor.decompress(buffer, compressed_size, uncompressed_size)
             }
         }
     }
@@ -70,6 +76,7 @@ impl Decompress for GzipDecompressor {
         &self,
         buffer: &mut dyn ByteBufferBase,
         compressed_size: usize,
+        uncompressed_size: usize,
     ) -> Result<BufferEnum, BoltReaderError> {
         let zero_copy;
         let data: Vec<u8> = if buffer.can_create_buffer_slice(buffer.get_rpos(), compressed_size) {
@@ -89,9 +96,68 @@ impl Decompress for GzipDecompressor {
         let data_slice = data.as_slice();
 
         let mut decompressor = GzDecoder::new(data_slice);
-        let mut decompressed_data = Vec::new();
+        let mut decompressed_data = Vec::with_capacity(uncompressed_size);
         decompressor.read_to_end(&mut decompressed_data)?;
 
+        if zero_copy {
+            mem::forget(data);
+        }
+
+        let mut decompressed_buffer = DirectByteBuffer::from_vec(decompressed_data);
+        decompressed_buffer.set_endian(LittleEndian);
+
+        Ok(BufferEnum::DirectByteBuffer(decompressed_buffer))
+    }
+}
+
+pub struct SnappyDecompressor {}
+
+impl SnappyDecompressor {
+    pub fn new() -> SnappyDecompressor {
+        SnappyDecompressor {}
+    }
+}
+
+impl Default for SnappyDecompressor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Decompress for SnappyDecompressor {
+    fn decompress(
+        &self,
+        buffer: &mut dyn ByteBufferBase,
+        compressed_size: usize,
+        uncompressed_size: usize,
+    ) -> Result<BufferEnum, BoltReaderError> {
+        let zero_copy;
+        let data: Vec<u8> = if buffer.can_create_buffer_slice(buffer.get_rpos(), compressed_size) {
+            zero_copy = true;
+            DirectByteBuffer::convert_byte_vec(
+                buffer.load_bytes_to_byte_vec(buffer.get_rpos(), compressed_size)?,
+                1,
+            )?
+        } else {
+            zero_copy = false;
+            DirectByteBuffer::convert_byte_vec(
+                buffer.load_bytes_to_byte_vec_deep_copy(buffer.get_rpos(), compressed_size)?,
+                1,
+            )?
+        };
+
+        let data_slice = data.as_slice();
+
+        let mut decompressor = snap::raw::Decoder::new();
+
+        let mut decompressed_data: Vec<u8> = vec![0; uncompressed_size];
+
+        let res = decompressor.decompress(data_slice, &mut decompressed_data);
+        if res.is_err() {
+            return Err(BoltReaderError::DecomrpessionError(String::from(
+                "Snappy Decompression Error. Currupted File",
+            )));
+        }
         if zero_copy {
             mem::forget(data);
         }
