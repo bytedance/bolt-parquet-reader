@@ -185,6 +185,22 @@ impl<'a> RowGroupReader<'a> {
         }
     }
 
+    pub fn skip(&mut self, skip_size: usize) -> Result<bool, BoltReaderError> {
+        if self.reading_index + skip_size >= self.num_values {
+            return Err(BoltReaderError::InternalError(String::from(
+                "Can not skip out of the Row Group within the Row Group Reader",
+            )));
+        }
+
+        self.reading_index += skip_size;
+
+        Ok(true)
+    }
+
+    pub fn get_remaining_rows(&self) -> usize {
+        self.num_values - self.reading_index
+    }
+
     pub fn read_with_filter(
         &mut self,
         initial_row_range_set: RowRangeSet,

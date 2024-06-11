@@ -16,7 +16,8 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use argparse::{ArgumentParser, Store};
+use argparse::{ArgumentParser, Store, StoreTrue};
+use bolt_parquet_reader::bridge::result_bridge::ResultBridge;
 use bolt_parquet_reader::file_reader::local_file_reader::LocalFileReader;
 use bolt_parquet_reader::filters::fixed_length_filter::FixedLengthRangeFilter;
 
@@ -32,6 +33,8 @@ fn main() {
     let mut files_str: String = String::new();
     let mut columns_str: String = String::new();
     let mut batch_size: usize = 0;
+    let mut point_query = false;
+    let mut skip_size: usize = 0;
 
     {
         let mut ap = ArgumentParser::new();
@@ -48,8 +51,21 @@ fn main() {
             Store,
             "Columns to be read. Format \"col1;col2;\"",
         );
-        ap.refer(&mut batch_size)
-            .add_option(&["-s", "--step"], Store, "step length for reading");
+        ap.refer(&mut point_query).add_option(
+            &["-p", "--point-query"],
+            StoreTrue,
+            "Using Point Query.",
+        );
+        ap.refer(&mut skip_size).add_option(
+            &["-s", "--skip-size"],
+            Store,
+            "Skip size for Point Query.",
+        );
+        ap.refer(&mut batch_size).add_option(
+            &["-l", "--length"],
+            Store,
+            "Step length for normal reading; Or maximum reading length for Point Query",
+        );
 
         ap.parse_args_or_exit();
     }
@@ -60,33 +76,69 @@ fn main() {
     let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> = HashMap::new();
 
     // We can add a filter for each column here by replace the None.
-    for column in columns {
-        columns_to_read.insert(column, None);
+    for column in &columns {
+        columns_to_read.insert(column.clone(), None);
     }
 
-    let total_time = Instant::now();
+    if point_query {
+        let total_time = Instant::now();
 
-    for file in &files {
-        let mut file_reader =
-            LocalFileReader::from_local_file(&file.to_string(), columns_to_read.clone())
-                .expect("unable to read file");
+        for file in &files {
+            let mut file_reader =
+                LocalFileReader::from_local_file(&file.to_string(), columns_to_read.clone())
+                    .expect("unable to read file");
 
-        let start = Instant::now();
-        let mut finished = false;
-        while !finished {
-            let res = file_reader.read(batch_size).expect("Reading error");
-            finished = res.1;
+            let start = Instant::now();
+            let mut finished = file_reader.skip(skip_size).expect("Error during skipping");
+            let mut to_read = batch_size;
+
+            while !finished && to_read != 0 {
+                let res = file_reader.read(to_read).expect("Reading error");
+                let sample_column = columns[0].clone();
+                to_read -= res
+                    .0
+                    .get(&sample_column)
+                    .expect("Column does not exist")
+                    .get_size();
+                finished = res.1;
+            }
+            println!(
+                "Finished Reading File: {}, Time: {} ms",
+                &file,
+                start.elapsed().as_millis()
+            );
         }
+
         println!(
-            "Finished Reading File: {}, Time: {} ms",
-            &file,
-            start.elapsed().as_millis()
+            "Finished Reading All the {} Files, Time: {} ms",
+            files.len(),
+            total_time.elapsed().as_millis()
+        );
+    } else {
+        let total_time = Instant::now();
+
+        for file in &files {
+            let mut file_reader =
+                LocalFileReader::from_local_file(&file.to_string(), columns_to_read.clone())
+                    .expect("unable to read file");
+
+            let start = Instant::now();
+            let mut finished = false;
+            while !finished {
+                let res = file_reader.read(batch_size).expect("Reading error");
+                finished = res.1;
+            }
+            println!(
+                "Finished Reading File: {}, Time: {} ms",
+                &file,
+                start.elapsed().as_millis()
+            );
+        }
+
+        println!(
+            "Finished Reading All the {} Files, Time: {} ms",
+            files.len(),
+            total_time.elapsed().as_millis()
         );
     }
-
-    println!(
-        "Finished Reading All the {} Files, Time: {} ms",
-        files.len(),
-        total_time.elapsed().as_millis()
-    );
 }

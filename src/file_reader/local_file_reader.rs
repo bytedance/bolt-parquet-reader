@@ -123,6 +123,53 @@ impl<'a> LocalFileReader<'a> {
         self.row_group_index >= self.num_row_groups
     }
 
+    fn skip_internal(&mut self, skip_size: &mut usize) -> Result<bool, BoltReaderError> {
+        // No Row Group Reader is prepared
+        if self.row_group_reader.is_none() {
+            let row_group_size = self.footer.row_groups[self.row_group_index].num_rows as usize;
+
+            // Skip the whole Row Group
+            if row_group_size <= *skip_size {
+                *skip_size -= row_group_size;
+                self.row_group_index += 1;
+                return Ok(self.row_group_index == self.num_row_groups);
+            } else {
+                self.prepare_local_row_group_reader()?;
+            }
+
+            Ok(false)
+        } else {
+            let row_group_reader = self.row_group_reader.as_mut().unwrap();
+            if skip_size >= &mut row_group_reader.get_remaining_rows() {
+                *skip_size -= row_group_reader.get_remaining_rows();
+                self.row_group_reader = None;
+                self.row_group_index += 1;
+
+                Ok(false)
+            } else {
+                row_group_reader.skip(*skip_size)?;
+                *skip_size = 0;
+
+                Ok(true)
+            }
+        }
+    }
+
+    pub fn skip(&mut self, mut skip_size: usize) -> Result<bool, BoltReaderError> {
+        let mut skip_finished = false;
+
+        while !skip_finished {
+            skip_finished = self.skip_internal(&mut skip_size)?;
+        }
+
+        // Is the whole file exhausted?
+        if self.row_group_index >= self.num_row_groups {
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn read(
         &mut self,
@@ -184,6 +231,41 @@ mod tests {
             assert!(res.is_ok());
             let res = res.unwrap();
             finished = res.1;
+        }
+    }
+
+    #[test]
+    fn test_skip() {
+        let path = String::from("src/sample_files/plain_row_group.parquet");
+        let batch_size = 10000;
+
+        let mut skip_size = 100;
+
+        for _i in 0..5 {
+            let mut columns_to_read: HashMap<String, Option<&dyn FixedLengthRangeFilter>> =
+                HashMap::new();
+            columns_to_read.insert(String::from(BOOLEAN_COLUMN), None);
+            columns_to_read.insert(String::from(INT32_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT32_COLUMN), None);
+            columns_to_read.insert(String::from(INT64_COLUMN), None);
+            columns_to_read.insert(String::from(FLOAT64_COLUMN), None);
+            columns_to_read.insert(String::from(STRING_COLUMN), None);
+
+            let res = LocalFileReader::from_local_file(&path.to_string(), columns_to_read);
+            assert!(res.is_ok());
+            let mut file_reader = res.unwrap();
+
+            let skip = skip_size;
+
+            let mut finished = file_reader.skip(skip).unwrap();
+
+            while !finished {
+                let res = file_reader.read(batch_size);
+                assert!(res.is_ok());
+                let res = res.unwrap();
+                finished = res.1;
+            }
+            skip_size = skip_size * 10;
         }
     }
 }
