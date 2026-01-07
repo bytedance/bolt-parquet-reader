@@ -14,6 +14,10 @@
   limitations under the License.
 -->
 
+> [!NOTE]
+> This repo is achvieved, please checkout the project [Bolt](https://github.com/bytedance/bolt) for the same requirements
+
+
 # ByteDance Bolt Parquet Reader
 ByteDance's next generation universal high-performance Parquet Reader.
 
